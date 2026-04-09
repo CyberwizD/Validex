@@ -1,2 +1,4 @@
 
 reflex==0.8.28.post1
+Pillow>=11,<12
+openbq==0.1.0
