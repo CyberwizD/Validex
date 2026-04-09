@@ -311,8 +311,8 @@ def brand_header(active: str) -> rx.Component:
         rx.spacer(),
         rx.hstack(
             nav_link("Dashboard", "/", active),
-            nav_link("Demographics", "/demographics", active),
-            nav_link("Biometrics", "/biometrics", active),
+            # nav_link("Demographics", "/demographics", active),
+            # nav_link("Biometrics", "/biometrics", active),
             spacing="8",
             align="center",
         ),
