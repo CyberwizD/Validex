@@ -503,70 +503,125 @@ def metric_row(row: dict[str, str]) -> rx.Component:
 def validation_modal() -> rx.Component:
     option_style = {
         "width": "100%",
-        "background": "rgba(255,255,255,0.88)",
-        "border": "1px solid rgba(20, 28, 50, 0.08)",
-        "border_radius": "20px",
-        "padding": "1.25rem",
+        "height": "100%",
+        "background": "white",
+        "border": "1px solid rgba(15, 23, 42, 0.06)",
+        "border_radius": "16px",
+        "padding": "1.75rem",
         "align_items": "start",
         "justify_content": "start",
+        "box_shadow": "0 4px 12px rgba(0,0,0,0.02)",
+        "cursor": "pointer",
+        "transition": "all 0.2s ease",
+        "_hover": {
+            "border_color": "rgba(15, 23, 42, 0.15)",
+            "box_shadow": "0 10px 25px rgba(0,0,0,0.06)",
+            "transform": "translateY(-2px)"
+        }
     }
+    
+    def icon_container(icon_name: str) -> rx.Component:
+        return rx.center(
+            rx.icon(icon_name, size=20, color=PRIMARY),
+            width="44px",
+            height="44px",
+            background="#F4F5F7",
+            border_radius="50%",
+            margin_bottom="1rem"
+        )
+
     return rx.dialog.root(
         rx.dialog.content(
             rx.vstack(
-                section_eyebrow("System Ready"),
-                rx.heading("Initialize Validation", size="8", color=PRIMARY),
-                rx.text(
-                    "Select the protocol required for identity verification.",
-                    color=MUTED,
-                    text_align="center",
+                rx.vstack(
+                    rx.center(
+                        rx.icon("shield-check", size=24, color="white"),
+                        background=PRIMARY,
+                        width="52px",
+                        height="52px",
+                        border_radius="14px",
+                    ),
+                    rx.heading("Initialize Validation", size="7", color=PRIMARY, font_weight="700"),
+                    rx.text(
+                        "Select the protocol required for identity verification.",
+                        color=MUTED,
+                        text_align="center",
+                        font_size="1.05rem",
+                    ),
+                    spacing="3",
+                    align="center",
+                    width="100%",
+                    padding_bottom="1.5rem",
                 ),
                 rx.grid(
-                    rx.button(
+                    rx.box(
                         rx.vstack(
-                            rx.heading("Demographic Validation", size="6", color=PRIMARY),
+                            icon_container("user-search"),
+                            rx.text("Demographic Validation", font_weight="700", color=PRIMARY, font_size="1.15rem"),
                             rx.text(
-                                "Name, DOB, Phone, Email and rule-based checks",
+                                "Name, DOB, Phone, Email & Rule-based checks",
                                 color=MUTED,
+                                font_size="0.95rem",
                                 text_align="left",
+                                line_height="1.5",
                             ),
-                            spacing="2",
                             align="start",
+                            spacing="1",
                         ),
                         on_click=AppState.route_to_demographics,
                         **option_style,
                     ),
-                    rx.button(
+                    rx.box(
                         rx.vstack(
-                            rx.heading("Biometric Validation", size="6", color=PRIMARY),
+                            icon_container("fingerprint"),
+                            rx.text("Biometric Validation", font_weight="700", color=PRIMARY, font_size="1.15rem"),
                             rx.text(
-                                "Face and fingerprint analysis via OpenBQ CLI",
+                                "Face and Fingerprint analysis via OpenBQ",
                                 color=MUTED,
+                                font_size="0.95rem",
                                 text_align="left",
+                                line_height="1.5",
                             ),
-                            spacing="2",
                             align="start",
+                            spacing="1",
                         ),
                         on_click=AppState.route_to_biometrics,
                         **option_style,
-                ),
+                    ),
                     columns="2",
-                spacing="4",
-                width="100%",
+                    spacing="5",
+                    width="100%",
                 ),
-                rx.button(
-                    "Cancel Request",
-                    variant="ghost",
-                    color=PRIMARY,
-                    on_click=AppState.close_validation_modal,
+                rx.hstack(
+                    rx.hstack(
+                        rx.box(width="8px", height="8px", background="#FDBA4D", border_radius="50%"),
+                        rx.text("SYSTEM READY", font_size="0.85rem", font_weight="700", letter_spacing="0.12em", color=PRIMARY),
+                        align="center",
+                        spacing="2",
+                    ),
+                    rx.button(
+                        "Cancel Request",
+                        variant="ghost",
+                        color=PRIMARY,
+                        font_weight="600",
+                        on_click=AppState.close_validation_modal,
+                        padding="0.5rem",
+                    ),
+                    justify="between",
+                    align="center",
+                    width="100%",
+                    padding_top="2rem",
                 ),
-                spacing="5",
+                spacing="0",
                 align="center",
                 width="100%",
             ),
-            max_width="860px",
-            width="92vw",
-            padding="2rem",
+            background="#F3F4F6",
             border_radius="28px",
+            padding="2.5rem",
+            max_width="720px",
+            width="90vw",
+            box_shadow="0 25px 50px rgba(0,0,0,0.15)",
         ),
         open=AppState.validation_modal_open,
         on_open_change=AppState.set_validation_modal_open,
