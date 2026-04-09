@@ -513,7 +513,7 @@ def manual_row(row: dict[str, Any]) -> rx.Component:
     status_indicator = rx.hstack(
         rx.box(width="8px", height="8px", border_radius="2px", 
                background=rx.cond(row["status"] == "Pass", "#10B981", rx.cond(row["status"] == "Warning", "#F59E0B", "#EF4444"))),
-        rx.text(rx.cond(row["status"] == "Pass", "PASS", rx.cond(row["status"] == "Warning", "WARNING", "FAIL")), font_size="0.75rem", font_weight="800", letter_spacing="0.05em"),
+        rx.text(rx.cond(row["status"] == "Pass", "PASS", rx.cond(row["status"] == "Warning", "WARNING", "FAIL")), font_size="0.75rem", font_weight="800", letter_spacing="0.05em", color=PRIMARY),
         align="center",
         spacing="2"
     )
@@ -813,8 +813,11 @@ def manual_entry_card() -> rx.Component:
                 rx.button(
                     "Clear",
                     on_click=AppState.reset_manual_form,
-                    variant="soft",
-                    color_scheme="gray",
+                    # variant="soft",
+                    # color_scheme="red",
+                    color=PRIMARY,
+                    background="#E5E7EB",
+                    border_radius="8px",
                     padding_x="1.5rem",
                     padding_y="1.5rem",
                     font_weight="600"
