@@ -459,7 +459,13 @@ def score_panel(title: str, score: float | rx.Var, band: str | rx.Var, summary: 
             rx.text("OVERALL AUTHORITY", font_size="0.85rem", font_weight="800", letter_spacing="0.15em", color=PRIMARY),
             rx.center(
                 rx.vstack(
-                    rx.text(rx.cond(score > 0, "92%", "0%"), font_size="3.5rem", font_weight="800", color=PRIMARY, line_height="1", margin_top="0.5rem"),
+                    rx.hstack(
+                        rx.text(score, font_size="3.5rem", font_weight="800", color=PRIMARY, line_height="1"),
+                        rx.text("%", font_size="1.5rem", font_weight="800", color=PRIMARY, margin_top="1.5rem"),
+                        align="end",
+                        spacing="1",
+                        margin_top="0.5rem",
+                    ),
                     rx.badge(band, background="#141C32", color="white", padding_x="0.8rem", padding_y="0.3rem", font_weight="800", font_size="0.75rem"),
                     spacing="2",
                     align="center",
@@ -783,7 +789,7 @@ def manual_entry_card() -> rx.Component:
                     align="start", spacing="2", width="100%"),
                 rx.vstack(
                     rx.text("DATE OF BIRTH", font_size="0.75rem", font_weight="700", letter_spacing="0.05em", color=PRIMARY),
-                    rx.input(placeholder="YYYY-MM-DD", type="text", max_length=10, value=AppState.date_of_birth, on_change=AppState.set_date_of_birth, size="3", **input_style),
+                    rx.input(type="date", max="9999-12-31", value=AppState.date_of_birth, on_change=AppState.set_date_of_birth, size="3", **input_style),
                     align="start", spacing="2", width="100%"),
                 rx.vstack(
                     rx.text("AGE", font_size="0.75rem", font_weight="700", letter_spacing="0.05em", color=PRIMARY),
@@ -805,6 +811,15 @@ def manual_entry_card() -> rx.Component:
             rx.hstack(
                 rx.spacer(),
                 rx.button(
+                    "Clear",
+                    on_click=AppState.reset_manual_form,
+                    variant="soft",
+                    color_scheme="gray",
+                    padding_x="1.5rem",
+                    padding_y="1.5rem",
+                    font_weight="600"
+                ),
+                rx.button(
                     "Validate Identity",
                     on_click=AppState.validate_manual_entry,
                     background=PRIMARY,
@@ -814,6 +829,7 @@ def manual_entry_card() -> rx.Component:
                     padding_y="1.5rem",
                     font_weight="600"
                 ),
+                spacing="3",
                 width="100%"
             ),
             width="100%",
@@ -895,7 +911,7 @@ def demographics_page() -> rx.Component:
                     rx.icon("list-filter", size=20, color=PRIMARY),
                     rx.cond(
                         AppState.has_manual_result,
-                        rx.select(["All", "Pass", "Warning", "Fail", "Review"], value=AppState.manual_filter, on_change=AppState.set_manual_filter, variant="soft", size="2", width="120px"),
+                        rx.select(["All", "Pass", "Warning", "Fail", "Review"], value=AppState.manual_filter, on_change=AppState.set_manual_filter, variant="surface", size="2", width="120px", color_scheme="gray"),
                         rx.fragment()
                     ),
                     rx.cond(
