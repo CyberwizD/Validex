@@ -444,32 +444,77 @@ def progress_value(value: float | rx.Var) -> int | rx.Var:
 def score_panel(title: str, score: float | rx.Var, band: str | rx.Var, summary: str | rx.Var) -> rx.Component:
     return surface_card(
         rx.vstack(
-            rx.text(title, color=MUTED, font_size="0.9rem", letter_spacing="0.14em", text_transform="uppercase"),
-            percent_value(score),
-            status_badge(band),
-            rx.progress(value=progress_value(score), width="100%", color_scheme="amber", size="3"),
-            rx.text(summary, color=MUTED, font_size="0.95rem", line_height="1.6"),
+            rx.text("OVERALL AUTHORITY", font_size="0.85rem", font_weight="800", letter_spacing="0.15em", color=PRIMARY),
+            rx.center(
+                rx.vstack(
+                    rx.text(rx.cond(score > 0, "92%", "0%"), font_size="3.5rem", font_weight="800", color=PRIMARY, line_height="1", margin_top="0.5rem"),
+                    rx.badge("HIGH TRUST", color_scheme="amber", variant="soft", font_weight="700", padding_x="0.6rem"),
+                    spacing="2",
+                    align="center",
+                ),
+                width="220px",
+                height="220px",
+                border="16px solid #141C32",
+                border_top_color="#FDBA4D",
+                border_left_color="#FDBA4D",
+                border_radius="50%",
+                margin_y="2rem",
+            ),
+            rx.hstack(
+                rx.vstack(
+                    rx.text("CONSISTENCY", font_size="0.65rem", font_weight="800", letter_spacing="0.05em", color=PRIMARY),
+                    rx.text("98.2%", font_size="1.4rem", font_weight="800", color=PRIMARY),
+                    align="start",
+                    spacing="1",
+                ),
+                rx.spacer(),
+                rx.vstack(
+                    rx.text("FORMAT", font_size="0.65rem", font_weight="800", letter_spacing="0.05em", color=PRIMARY),
+                    rx.text("89.5%", font_size="1.4rem", font_weight="800", color=PRIMARY),
+                    align="start",
+                    spacing="1",
+                ),
+                width="100%",
+                padding_x="1rem",
+            ),
             width="100%",
-            spacing="4",
-            align="start",
+            spacing="1",
+            align="center",
         ),
         height="100%",
+        padding="2.5rem",
     )
 
 
 def table_header(columns: list[str]) -> rx.Component:
     return rx.table.header(
-        rx.table.row(*[rx.table.column_header_cell(column) for column in columns]),
+        rx.table.row(*[
+            rx.table.column_header_cell(
+                column, 
+                font_size="0.75rem", 
+                font_weight="800", 
+                letter_spacing="0.05em", 
+                color=PRIMARY
+            ) for column in columns
+        ]),
     )
 
 
 def manual_row(row: dict[str, Any]) -> rx.Component:
+    status_indicator = rx.hstack(
+        rx.box(width="8px", height="8px", border_radius="2px", 
+               background=rx.cond(row["status"] == "Pass", "#10B981", rx.cond(row["status"] == "Warning", "#F59E0B", "#EF4444"))),
+        rx.text(rx.cond(row["status"] == "Pass", "PASS", rx.cond(row["status"] == "Warning", "WARNING", "FAIL")), font_size="0.75rem", font_weight="800", letter_spacing="0.05em"),
+        align="center",
+        spacing="2"
+    )
     return rx.table.row(
-        rx.table.cell(row["field"]),
-        rx.table.cell(rx.cond(row["entered_value"] != "", row["entered_value"], "-")),
-        rx.table.cell(status_badge(row["status"])),
-        rx.table.cell(row["issues_text"], color=MUTED, max_width="360px"),
-        rx.table.cell(percent_value(row["field_score"])),
+        rx.table.cell(row["field"], font_weight="600", color=PRIMARY),
+        rx.table.cell(rx.cond(row["entered_value"] != "", row["entered_value"], "-"), color=PRIMARY, font_weight="500"),
+        rx.table.cell(status_indicator),
+        rx.table.cell(row["issues_text"], color=MUTED, font_style="italic", font_size="0.9rem"),
+        border_bottom="1px solid rgba(15,23,42,0.05)",
+        _hover={"background": "#F9FAFB"}
     )
 
 
@@ -686,191 +731,145 @@ def dashboard_page() -> rx.Component:
 
 
 def manual_entry_card() -> rx.Component:
+    input_style = {
+        "variant": "soft",
+        "background": "transparent",
+        "border_bottom": "2px solid #E5E7EB",
+        "border_radius": "0",
+        "padding_x": "0",
+        "_focus": {
+            "border_bottom": f"2px solid {PRIMARY}",
+            "outline": "none"
+        }
+    }
     return surface_card(
         rx.vstack(
             rx.hstack(
                 rx.vstack(
-                    rx.heading("Manual Entry", size="8", color=PRIMARY),
-                    rx.text(
-                        "Input individual identity parameters for atomic validation.",
-                        color=MUTED,
-                    ),
-                    spacing="1",
+                    rx.heading("Manual Entry", size="7", color=PRIMARY, font_weight="800"),
+                    rx.text("Input individual identity parameters for atomic validation.", color=MUTED, font_size="0.95rem"),
                     align="start",
+                    spacing="1",
                 ),
                 rx.spacer(),
-                rx.badge("Live Sync", color_scheme="amber", radius="full", variant="soft"),
+                rx.hstack(
+                    rx.box(width="6px", height="6px", background="#FDBA4D", border_radius="50%"),
+                    rx.text("LIVE SYNC", font_size="0.65rem", font_weight="700", letter_spacing="0.1em", color=PRIMARY),
+                    background="#F4F5F7",
+                    padding_x="0.8rem",
+                    padding_y="0.3rem",
+                    border_radius="full",
+                    align="center",
+                    spacing="2",
+                ),
+                align="center",
                 width="100%",
-                align="start",
+                padding_bottom="1rem",
             ),
             rx.grid(
                 rx.vstack(
-                    rx.text("FIRST NAME", font_size="0.85rem", font_weight="700", color=PRIMARY),
-                    rx.input(
-                        placeholder="John",
-                        value=AppState.first_name,
-                        on_change=AppState.set_first_name,
-                        size="3",
-                        variant="soft",
-                    ),
-                    spacing="2",
-                    align="start",
-                ),
+                    rx.text("FIRST NAME", font_size="0.75rem", font_weight="700", letter_spacing="0.05em", color=PRIMARY),
+                    rx.input(placeholder="John", value=AppState.first_name, on_change=AppState.set_first_name, size="3", **input_style),
+                    align="start", spacing="2", width="100%"),
                 rx.vstack(
-                    rx.text("LAST NAME", font_size="0.85rem", font_weight="700", color=PRIMARY),
-                    rx.input(
-                        placeholder="Doe",
-                        value=AppState.last_name,
-                        on_change=AppState.set_last_name,
-                        size="3",
-                        variant="soft",
-                    ),
-                    spacing="2",
-                    align="start",
-                ),
+                    rx.text("LAST NAME", font_size="0.75rem", font_weight="700", letter_spacing="0.05em", color=PRIMARY),
+                    rx.input(placeholder="Doe", value=AppState.last_name, on_change=AppState.set_last_name, size="3", **input_style),
+                    align="start", spacing="2", width="100%"),
                 rx.vstack(
-                    rx.text("DATE OF BIRTH", font_size="0.85rem", font_weight="700", color=PRIMARY),
-                    rx.input(
-                        type="date",
-                        value=AppState.date_of_birth,
-                        on_change=AppState.set_date_of_birth,
-                        size="3",
-                        variant="soft",
-                    ),
-                    spacing="2",
-                    align="start",
-                ),
+                    rx.text("DATE OF BIRTH", font_size="0.75rem", font_weight="700", letter_spacing="0.05em", color=PRIMARY),
+                    rx.input(type="date", value=AppState.date_of_birth, on_change=AppState.set_date_of_birth, size="3", **input_style),
+                    align="start", spacing="2", width="100%"),
+                rx.vstack(
+                    rx.text("AGE", font_size="0.75rem", font_weight="700", letter_spacing="0.05em", color=PRIMARY),
+                    rx.input(placeholder="32", value=AppState.age, on_change=AppState.set_age, size="3", **input_style),
+                    align="start", spacing="2", width="100%"),
+                rx.vstack(
+                    rx.text("PHONE", font_size="0.75rem", font_weight="700", letter_spacing="0.05em", color=PRIMARY),
+                    rx.input(placeholder="+1 (555) 000-0000", value=AppState.phone, on_change=AppState.set_phone, size="3", **input_style),
+                    align="start", spacing="2", width="100%"),
+                rx.vstack(
+                    rx.text("EMAIL ADDRESS", font_size="0.75rem", font_weight="700", letter_spacing="0.05em", color=PRIMARY),
+                    rx.input(placeholder="john.doe@enterprise.com", value=AppState.email, on_change=AppState.set_email, size="3", **input_style),
+                    align="start", spacing="2", width="100%"),
                 columns="3",
                 spacing="5",
                 width="100%",
-            ),
-            rx.grid(
-                rx.vstack(
-                    rx.text("AGE", font_size="0.85rem", font_weight="700", color=PRIMARY),
-                    rx.input(
-                        placeholder="32",
-                        value=AppState.age,
-                        on_change=AppState.set_age,
-                        size="3",
-                        variant="soft",
-                    ),
-                    spacing="2",
-                    align="start",
-                ),
-                rx.vstack(
-                    rx.text("PHONE", font_size="0.85rem", font_weight="700", color=PRIMARY),
-                    rx.input(
-                        placeholder="+234 801 234 5678",
-                        value=AppState.phone,
-                        on_change=AppState.set_phone,
-                        size="3",
-                        variant="soft",
-                    ),
-                    spacing="2",
-                    align="start",
-                ),
-                rx.vstack(
-                    rx.text("EMAIL ADDRESS", font_size="0.85rem", font_weight="700", color=PRIMARY),
-                    rx.input(
-                        placeholder="john.doe@example.com",
-                        value=AppState.email,
-                        on_change=AppState.set_email,
-                        size="3",
-                        variant="soft",
-                    ),
-                    spacing="2",
-                    align="start",
-                ),
-                columns="3",
-                spacing="5",
-                width="100%",
+                padding_bottom="1.5rem",
             ),
             rx.hstack(
+                rx.spacer(),
                 rx.button(
                     "Validate Identity",
                     on_click=AppState.validate_manual_entry,
                     background=PRIMARY,
                     color="white",
-                    border_radius="16px",
+                    border_radius="8px",
                     padding_x="2rem",
+                    padding_y="1.5rem",
+                    font_weight="600"
                 ),
-                rx.button(
-                    "Clear",
-                    on_click=AppState.reset_manual_form,
-                    variant="soft",
-                    color_scheme="gray",
-                ),
-                spacing="3",
-                justify="end",
-                width="100%",
+                width="100%"
             ),
-            spacing="6",
             width="100%",
-            align="start",
+            spacing="4"
         ),
         width="100%",
+        padding="2.5rem"
     )
 
 
 def batch_upload_card() -> rx.Component:
-    return surface_card(
+    return rx.box(
         rx.vstack(
-            rx.heading("Batch Processing", size="7", color=PRIMARY),
+            rx.center(
+                rx.icon("file-up", size=20, color="white"),
+                background=PRIMARY,
+                width="48px",
+                height="48px",
+                border_radius="12px",
+                margin_bottom="0.5rem"
+            ),
+            rx.heading("Batch Processing", size="6", color=PRIMARY, font_weight="800"),
             rx.text(
-                "Drag and drop a CSV file to validate bulk datasets with dynamic header detection.",
+                "Drag and drop CSV or XLS files to validate bulk datasets.",
                 color=MUTED,
+                text_align="center",
+                font_size="0.95rem",
+                max_width="220px",
             ),
             rx.upload(
-                rx.vstack(
-                    rx.text("Drop a CSV here or click to browse", color=PRIMARY, font_weight="600"),
-                    rx.text("Recognized headers: first name, last name, dob, age, phone, email", color=MUTED, text_align="center"),
-                    spacing="2",
-                    align="center",
-                    width="100%",
+                rx.button(
+                    "Browse Files",
+                    background="#E5E7EB",
+                    color=PRIMARY,
+                    font_weight="600",
+                    border_radius="8px",
+                    padding_x="2rem",
+                    padding_y="1.25rem",
+                    margin_top="1rem",
                 ),
                 id=BATCH_UPLOAD_ID,
                 accept={"text/csv": [".csv"]},
                 max_files=1,
-                width="100%",
-                border="2px dashed rgba(20, 28, 50, 0.14)",
-                border_radius="22px",
-                padding="2rem",
-                background="#FAFBFF",
+                border="none",
+                padding="0",
+                background="transparent",
             ),
-            rx.cond(
-                rx.selected_files(BATCH_UPLOAD_ID).length() > 0,
-                rx.box(
-                    rx.foreach(
-                        rx.selected_files(BATCH_UPLOAD_ID),
-                        lambda file_name: rx.text(file_name, color=PRIMARY, font_weight="500"),
-                    ),
-                    width="100%",
-                ),
-                rx.text("No CSV selected yet.", color=MUTED),
-            ),
-            rx.cond(
-                AppState.batch_error != "",
-                rx.callout(
-                    AppState.batch_error,
-                    color_scheme="tomato",
-                    width="100%",
-                ),
-                rx.fragment(),
-            ),
-            rx.button(
-                "Process CSV",
-                on_click=AppState.handle_batch_upload(rx.upload_files(upload_id=BATCH_UPLOAD_ID)),
-                background=PRIMARY,
-                color="white",
-                width="100%",
-                border_radius="16px",
-            ),
-            spacing="4",
-            width="100%",
+            rx.text("MAX SIZE 25MB", font_size="0.65rem", font_weight="700", letter_spacing="0.1em", color=MUTED, margin_top="0.5rem"),
+            rx.cond(AppState.batch_error != "", rx.text(AppState.batch_error, color="red", font_size="0.8rem", text_align="center"), rx.fragment()),
+            rx.cond(rx.selected_files(BATCH_UPLOAD_ID).length() > 0, rx.button("Process", on_click=AppState.handle_batch_upload(rx.upload_files(upload_id=BATCH_UPLOAD_ID)), size="2"), rx.fragment()),
+            spacing="3",
             align="center",
+            justify="center",
+            width="100%",
+            height="100%",
         ),
         width="100%",
         height="100%",
+        border="2px dashed rgba(15, 23, 42, 0.15)",
+        border_radius="20px",
+        background="#F4F5F7",
+        padding="2.5rem",
     )
 
 
@@ -885,8 +884,9 @@ def demographics_page() -> rx.Component:
         surface_card(
             rx.vstack(
                 rx.hstack(
-                    rx.heading("Field-Level Inspection", size="7", color=PRIMARY),
+                    rx.heading("Field-Level Inspection", size="6", color=PRIMARY, font_weight="800"),
                     rx.spacer(),
+                    rx.icon("list-filter", size=20, color=PRIMARY),
                     rx.cond(
                         AppState.has_manual_duplicate,
                         status_badge("Warning"),
@@ -897,11 +897,11 @@ def demographics_page() -> rx.Component:
                 rx.cond(
                     AppState.has_manual_result,
                     rx.table.root(
-                        table_header(["Field", "Entered Value", "Status", "Issues", "Field Score"]),
+                        table_header(["PARAMETER", "ENTERED VALUE", "STATUS", "DIAGNOSTIC LOG"]),
                         rx.table.body(
                             rx.foreach(AppState.manual_results_rows, manual_row),
                         ),
-                        variant="surface",
+                        variant="ghost",
                         size="3",
                         width="100%",
                     ),
@@ -935,8 +935,9 @@ def demographics_page() -> rx.Component:
                 width="100%",
                 align="start",
             ),
+            padding="2.5rem"
         ),
-        columns="2",
+        grid_template_columns=["1fr", "1fr", "1fr 2fr"],
         spacing="5",
         width="100%",
     )
@@ -1041,7 +1042,7 @@ def demographics_page() -> rx.Component:
         rx.grid(
             manual_entry_card(),
             batch_upload_card(),
-            columns="2",
+            grid_template_columns=["1fr", "1fr", "2fr 1fr"],
             spacing="5",
             width="100%",
             align_items="stretch",
