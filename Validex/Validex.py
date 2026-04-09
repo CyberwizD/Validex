@@ -61,6 +61,17 @@ class AppState(rx.State):
     manual_results_rows: list[dict[str, Any]] = []
     manual_duplicate_match: dict[str, Any] = {}
     has_manual_result: bool = False
+    
+    manual_filter: str = "All"
+    
+    def set_manual_filter(self, val: str):
+        self.manual_filter = val
+
+    @rx.var
+    def filtered_manual_results_rows(self) -> list[dict[str, Any]]:
+        if self.manual_filter == "All":
+            return self.manual_results_rows
+        return [row for row in self.manual_results_rows if row["status"] == self.manual_filter]
 
     batch_source_name: str = ""
     batch_error: str = ""
@@ -141,6 +152,7 @@ class AppState(rx.State):
         self.manual_duplicate_match = {}
         self.has_manual_result = False
         self.has_manual_duplicate = False
+        self.manual_filter = "All"
         self.batch_source_name = ""
         self.batch_results_rows = []
         self.batch_summary = default_batch_summary()
@@ -448,7 +460,7 @@ def score_panel(title: str, score: float | rx.Var, band: str | rx.Var, summary: 
             rx.center(
                 rx.vstack(
                     rx.text(rx.cond(score > 0, "92%", "0%"), font_size="3.5rem", font_weight="800", color=PRIMARY, line_height="1", margin_top="0.5rem"),
-                    rx.badge("HIGH TRUST", color_scheme="amber", variant="soft", font_weight="700", padding_x="0.6rem"),
+                    rx.badge(band, background="#141C32", color="white", padding_x="0.8rem", padding_y="0.3rem", font_weight="800", font_size="0.75rem"),
                     spacing="2",
                     align="center",
                 ),
@@ -458,27 +470,18 @@ def score_panel(title: str, score: float | rx.Var, band: str | rx.Var, summary: 
                 border_top_color="#FDBA4D",
                 border_left_color="#FDBA4D",
                 border_radius="50%",
-                margin_y="2rem",
+                margin_y="1.5rem",
             ),
-            rx.hstack(
-                rx.vstack(
-                    rx.text("CONSISTENCY", font_size="0.65rem", font_weight="800", letter_spacing="0.05em", color=PRIMARY),
-                    rx.text("98.2%", font_size="1.4rem", font_weight="800", color=PRIMARY),
-                    align="start",
-                    spacing="1",
-                ),
-                rx.spacer(),
-                rx.vstack(
-                    rx.text("FORMAT", font_size="0.65rem", font_weight="800", letter_spacing="0.05em", color=PRIMARY),
-                    rx.text("89.5%", font_size="1.4rem", font_weight="800", color=PRIMARY),
-                    align="start",
-                    spacing="1",
-                ),
-                width="100%",
-                padding_x="1rem",
+            rx.text(
+                summary,
+                color=MUTED,
+                font_size="0.95rem",
+                text_align="center",
+                max_width="250px",
+                line_height="1.5",
             ),
             width="100%",
-            spacing="1",
+            spacing="4",
             align="center",
         ),
         height="100%",
@@ -737,6 +740,9 @@ def manual_entry_card() -> rx.Component:
         "border_bottom": "2px solid #E5E7EB",
         "border_radius": "0",
         "padding_x": "0",
+        "color": PRIMARY,
+        "font_weight": "600",
+        "font_size": "1.05rem",
         "_focus": {
             "border_bottom": f"2px solid {PRIMARY}",
             "outline": "none"
@@ -777,7 +783,7 @@ def manual_entry_card() -> rx.Component:
                     align="start", spacing="2", width="100%"),
                 rx.vstack(
                     rx.text("DATE OF BIRTH", font_size="0.75rem", font_weight="700", letter_spacing="0.05em", color=PRIMARY),
-                    rx.input(type="date", value=AppState.date_of_birth, on_change=AppState.set_date_of_birth, size="3", **input_style),
+                    rx.input(placeholder="YYYY-MM-DD", type="text", max_length=10, value=AppState.date_of_birth, on_change=AppState.set_date_of_birth, size="3", **input_style),
                     align="start", spacing="2", width="100%"),
                 rx.vstack(
                     rx.text("AGE", font_size="0.75rem", font_weight="700", letter_spacing="0.05em", color=PRIMARY),
@@ -888,6 +894,11 @@ def demographics_page() -> rx.Component:
                     rx.spacer(),
                     rx.icon("list-filter", size=20, color=PRIMARY),
                     rx.cond(
+                        AppState.has_manual_result,
+                        rx.select(["All", "Pass", "Warning", "Fail", "Review"], value=AppState.manual_filter, on_change=AppState.set_manual_filter, variant="soft", size="2", width="120px"),
+                        rx.fragment()
+                    ),
+                    rx.cond(
                         AppState.has_manual_duplicate,
                         status_badge("Warning"),
                         rx.fragment(),
@@ -896,14 +907,20 @@ def demographics_page() -> rx.Component:
                 ),
                 rx.cond(
                     AppState.has_manual_result,
-                    rx.table.root(
-                        table_header(["PARAMETER", "ENTERED VALUE", "STATUS", "DIAGNOSTIC LOG"]),
-                        rx.table.body(
-                            rx.foreach(AppState.manual_results_rows, manual_row),
+                    rx.box(
+                        rx.table.root(
+                            table_header(["PARAMETER", "ENTERED VALUE", "STATUS", "DIAGNOSTIC LOG"]),
+                            rx.table.body(
+                                rx.foreach(AppState.filtered_manual_results_rows, manual_row),
+                            ),
+                            variant="ghost",
+                            size="3",
+                            width="100%",
                         ),
-                        variant="ghost",
-                        size="3",
                         width="100%",
+                        max_height="350px",
+                        overflow_y="auto",
+                        padding_right="0.5rem",
                     ),
                     rx.text(
                         "Manual validation results will appear here after analysis.",
