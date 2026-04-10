@@ -73,6 +73,11 @@ class AppState(rx.State):
             return self.manual_results_rows
         return [row for row in self.manual_results_rows if row["status"] == self.manual_filter]
 
+    @rx.var
+    def authority_ring_bg(self) -> str:
+        score_val = max(0, min(100, int(self.manual_score))) if self.manual_score else 0
+        return f"conic-gradient(#FDBA4D {score_val}%, #141C32 {score_val}% 100%)"
+
     batch_source_name: str = ""
     batch_error: str = ""
     batch_results_rows: list[dict[str, Any]] = []
@@ -458,23 +463,27 @@ def score_panel(title: str, score: float | rx.Var, band: str | rx.Var, summary: 
         rx.vstack(
             rx.text("OVERALL AUTHORITY", font_size="0.85rem", font_weight="800", letter_spacing="0.15em", color=PRIMARY),
             rx.center(
-                rx.vstack(
-                    rx.hstack(
-                        rx.text(score, font_size="3.5rem", font_weight="800", color=PRIMARY, line_height="1"),
-                        rx.text("%", font_size="1.5rem", font_weight="800", color=PRIMARY, margin_top="1.5rem"),
-                        align="end",
-                        spacing="1",
-                        margin_top="0.5rem",
+                rx.center(
+                    rx.vstack(
+                        rx.hstack(
+                            rx.text(score, font_size="3.5rem", font_weight="800", color=PRIMARY, line_height="1"),
+                            rx.text("%", font_size="1.5rem", font_weight="800", color=PRIMARY, margin_top="1.5rem"),
+                            align="end",
+                            spacing="1",
+                            margin_top="0.5rem",
+                        ),
+                        rx.badge(band, background="#141C32", color="white", padding_x="0.8rem", padding_y="0.3rem", font_weight="800", font_size="0.75rem"),
+                        spacing="2",
+                        align="center",
                     ),
-                    rx.badge(band, background="#141C32", color="white", padding_x="0.8rem", padding_y="0.3rem", font_weight="800", font_size="0.75rem"),
-                    spacing="2",
-                    align="center",
+                    width="188px",
+                    height="188px",
+                    background="white",
+                    border_radius="50%",
                 ),
                 width="220px",
                 height="220px",
-                border="16px solid #141C32",
-                border_top_color="#FDBA4D",
-                border_left_color="#FDBA4D",
+                background=AppState.authority_ring_bg,
                 border_radius="50%",
                 margin_y="1.5rem",
             ),
