@@ -485,7 +485,7 @@ def progress_value(value: float | rx.Var) -> int | rx.Var:
 def score_panel(title: str, score: float | rx.Var, band: str | rx.Var, summary: str | rx.Var) -> rx.Component:
     return surface_card(
         rx.vstack(
-            rx.text("OVERALL AUTHORITY", font_size="0.85rem", font_weight="800", letter_spacing="0.15em", color=PRIMARY),
+            rx.text("VALIDATION SCORE", font_size="0.85rem", font_weight="800", letter_spacing="0.15em", color=PRIMARY),
             rx.center(
                 rx.center(
                     rx.vstack(
@@ -973,9 +973,31 @@ def demographics_page() -> rx.Component:
                         overflow_y="auto",
                         padding_right="0.5rem",
                     ),
-                    rx.text(
-                        "Manual validation results will appear here after analysis.",
-                        color=MUTED,
+                    rx.center(
+                        rx.vstack(
+                            rx.box(
+                                rx.icon("file-search", size=32, color=PRIMARY),
+                                background="#F3F5FA",
+                                padding="1rem",
+                                border_radius="16px",
+                                margin_bottom="0.5rem"
+                            ),
+                            rx.text("No data to inspect", font_weight="700", color=PRIMARY, font_size="1.1rem"),
+                            rx.text(
+                                "Submit a manual entry to view a detailed breakdown of identity parameters, field verification statuses, and rule-based diagnostic logs.",
+                                color=MUTED,
+                                text_align="center",
+                                font_size="0.95rem",
+                                max_width="400px"
+                            ),
+                            align="center",
+                            spacing="2",
+                        ),
+                        width="100%",
+                        min_height="350px",
+                        border="2px dashed rgba(20, 28, 50, 0.08)",
+                        border_radius="16px",
+                        background="#FAFAFC"
                     ),
                 ),
                 rx.cond(
