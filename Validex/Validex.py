@@ -1432,7 +1432,25 @@ def biometrics_page() -> rx.Component:
     return shell(content, "Biometrics")
 
 
+global_style = {
+    "::-webkit-scrollbar": {
+        "width": "6px",
+        "height": "6px",
+    },
+    "::-webkit-scrollbar-track": {
+        "background": "transparent",
+    },
+    "::-webkit-scrollbar-thumb": {
+        "background": "#CBD5E1",
+        "border_radius": "10px",
+    },
+    "::-webkit-scrollbar-thumb:hover": {
+        "background": "#94A3B8",
+    },
+}
+
 app = rx.App(
+    style=global_style,
     theme=rx.theme(
         accent_color="amber",
         gray_color="slate",
