@@ -773,10 +773,10 @@ def dashboard_page() -> rx.Component:
 
 def manual_entry_card() -> rx.Component:
     input_style = {
-        "variant": "soft",
+        "variant": "surface",
         "background": "transparent",
         "border_bottom": "2px solid #E5E7EB",
-        "border_radius": "0",
+        "border_radius": "2",
         "padding_x": "0",
         "color": PRIMARY,
         "font_weight": "600",
@@ -833,7 +833,7 @@ def manual_entry_card() -> rx.Component:
                     align="start", spacing="2", width="100%"),
                 rx.vstack(
                     rx.text("EMAIL ADDRESS", font_size="0.75rem", font_weight="700", letter_spacing="0.05em", color=PRIMARY),
-                    rx.input(placeholder="john.doe@enterprise.com", value=AppState.email, on_change=AppState.set_email, size="3", **input_style),
+                    rx.input(placeholder="john.doe@gmail.com", value=AppState.email, on_change=AppState.set_email, size="3", **input_style),
                     align="start", spacing="2", width="100%"),
                 columns="3",
                 spacing="5",
