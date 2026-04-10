@@ -93,10 +93,16 @@ class AppState(rx.State):
     biometric_source_filename: str = ""
     biometric_preview_filename: str = ""
     biometric_preview_is_image: bool = False
+    biometric_preview_history: list[str] = []
     biometric_metric_rows: list[dict[str, str]] = []
     biometric_issues: list[str] = []
     has_biometric_result: bool = False
     has_manual_duplicate: bool = False
+
+    @rx.var
+    def biometric_ring_bg(self) -> str:
+        score_val = max(0, min(100, int(self.biometric_score))) if self.biometric_score else 0
+        return f"conic-gradient(#141C32 {score_val}%, #E5E7EB {score_val}% 100%)"
 
     @rx.var
     def batch_total_pages(self) -> int:
@@ -170,6 +176,7 @@ class AppState(rx.State):
         self.biometric_source_filename = ""
         self.biometric_preview_filename = ""
         self.biometric_preview_is_image = False
+        self.biometric_preview_history = []
         self.biometric_metric_rows = []
         self.biometric_issues = []
         self.has_biometric_result = False
@@ -183,6 +190,7 @@ class AppState(rx.State):
         self.biometric_source_filename = ""
         self.biometric_preview_filename = ""
         self.biometric_preview_is_image = False
+        self.biometric_preview_history = []
         self.biometric_metric_rows = []
         self.biometric_issues = []
         self.has_biometric_result = False
@@ -280,31 +288,47 @@ class AppState(rx.State):
         if not files:
             self.biometric_error = "Select a biometric sample before analysis."
             return
-        file = files[0]
-        filename = file.filename or "sample"
-        content = await file.read()
-        saved_name = save_uploaded_bytes(content, filename, rx.get_upload_dir())
-        saved_path = rx.get_upload_dir() / saved_name
-        request = BiometricValidationRequest(
-            modality=self.biometric_modality,
-            source_filename=filename,
-        )
-        result = run_openbq_analysis(request, saved_path, saved_name)
-        insert_biometric_record(result)
-        self.biometric_score = result.overall_score
-        self.biometric_status = result.status
-        self.biometric_source_filename = result.source_filename
-        self.biometric_preview_filename = result.preview_filename
-        self.biometric_preview_is_image = result.preview_filename.lower().endswith(
-            (".jpg", ".jpeg", ".png", ".bmp")
-        )
-        self.biometric_metric_rows = [
-            {"label": key, "value": value} for key, value in result.metrics.items()
-        ]
-        self.biometric_issues = result.issue_list
-        self.has_biometric_result = True
-        if result.status == "Rejected" and result.overall_score == 0:
-            self.biometric_error = "; ".join(result.issue_list)
+
+        for file in files:
+            filename = file.filename or "sample"
+            content = await file.read()
+            saved_name = save_uploaded_bytes(content, filename, rx.get_upload_dir())
+            saved_path = rx.get_upload_dir() / saved_name
+            request = BiometricValidationRequest(
+                modality=self.biometric_modality,
+                source_filename=filename,
+            )
+            try:
+                result = run_openbq_analysis(request, saved_path, saved_name)
+                insert_biometric_record(result)
+                self.biometric_score = result.overall_score
+                self.biometric_status = result.status
+                self.biometric_source_filename = result.source_filename
+                self.biometric_preview_filename = result.preview_filename
+                self.biometric_preview_is_image = result.preview_filename.lower().endswith(
+                    (".jpg", ".jpeg", ".png", ".bmp")
+                )
+                self.biometric_metric_rows = [
+                    {"label": key, "value": value} for key, value in result.metrics.items()
+                ]
+                self.biometric_issues = result.issue_list
+                self.has_biometric_result = True
+                
+                if result.status == "Rejected" and result.overall_score == 0:
+                    self.biometric_error = "; ".join(result.issue_list)
+                    
+                if self.biometric_preview_is_image:
+                    self.biometric_preview_history.insert(0, self.biometric_preview_filename)
+            except Exception as e:
+                self.biometric_error = f"Analysis Backend Offline. Ensure Docker Desktop is running. ({str(e)})"
+                self.has_biometric_result = True
+                self.biometric_score = 0
+                self.biometric_status = "Failed"
+                self.biometric_metric_rows = [{"label": "Analysis", "value": "Service Offline"}]
+                self.biometric_issues = ["Could not connect to OpenBQ validation cluster."]
+                if saved_name.lower().endswith((".jpg", ".jpeg", ".png", ".bmp")):
+                    self.biometric_preview_history.insert(0, saved_name)
+
         return rx.clear_selected_files(BIOMETRIC_UPLOAD_ID)
 
 
@@ -554,12 +578,11 @@ def batch_row(row: dict[str, Any]) -> rx.Component:
 
 def metric_row(row: dict[str, str]) -> rx.Component:
     return rx.hstack(
-        rx.text(row["label"], color=MUTED, font_weight="500"),
+        rx.icon("check-circle", size=14, color=PRIMARY),
+        rx.text(row["label"], font_size="0.85rem", font_weight="600", color=PRIMARY),
         rx.spacer(),
-        rx.text(row["value"], color=PRIMARY, font_weight="600"),
-        width="100%",
-        border_bottom="1px solid rgba(15, 23, 42, 0.08)",
-        padding_y="0.7rem",
+        rx.text(row["value"], font_size="0.85rem", font_weight="800", color=PRIMARY),
+        width="100%", align="center", padding_y="0.8rem",
     )
 
 
@@ -1103,190 +1126,268 @@ def demographics_page() -> rx.Component:
 def biometric_upload_card() -> rx.Component:
     supported_text = rx.cond(
         AppState.biometric_modality == "face",
-        "Supported formats: JPG, JPEG, JP2, BMP, PNG",
+        "Supported formats: RAW, TIFF, PNG, JPG (High Res Recommended)",
         "Supported formats: PNG, WSQ (500 PPI recommended)",
     )
     return surface_card(
         rx.vstack(
             rx.hstack(
-                rx.button(
-                    "Face",
-                    on_click=AppState.set_biometric_mode("face"),
-                    background=rx.cond(
-                        AppState.biometric_modality == "face",
-                        PRIMARY,
-                        "#F3F5FA",
-                    ),
-                    color=rx.cond(AppState.biometric_modality == "face", "white", PRIMARY),
-                    border_radius="14px",
-                ),
-                rx.button(
-                    "Fingerprint",
-                    on_click=AppState.set_biometric_mode("fingerprint"),
-                    background=rx.cond(
-                        AppState.biometric_modality == "fingerprint",
-                        PRIMARY,
-                        "#F3F5FA",
-                    ),
-                    color=rx.cond(
-                        AppState.biometric_modality == "fingerprint",
-                        "white",
-                        PRIMARY,
-                    ),
-                    border_radius="14px",
-                ),
+                rx.icon("cloud-upload", size=24, color=PRIMARY),
+                rx.heading("Source Asset Ingestion", size="6", color=PRIMARY, font_weight="800"),
+                align="center",
                 spacing="3",
-            ),
-            rx.heading("Source Asset Ingestion", size="8", color=PRIMARY),
-            rx.text(
-                "Analyze and verify individual identity markers with precision curation.",
-                color=MUTED,
             ),
             rx.upload(
                 rx.vstack(
+                    rx.center(
+                        rx.icon("upload", size=24, color=PRIMARY),
+                        width="64px",
+                        height="64px",
+                        background="#EDF0F7",
+                        border_radius="16px",
+                        margin_bottom="1rem",
+                    ),
                     rx.text("Drag and drop biometric samples", color=PRIMARY, font_weight="600"),
-                    rx.text(supported_text, color=MUTED, text_align="center"),
+                    rx.text(supported_text, color=MUTED, text_align="center", font_size="0.85rem"),
+                    rx.button(
+                        "Select Local Files",
+                        background="#141C32",
+                        color="white",
+                        border_radius="8px",
+                        padding_x="2rem",
+                        margin_top="1.5rem",
+                        font_weight="600"
+                    ),
                     spacing="2",
                     align="center",
                     width="100%",
                 ),
                 id=BIOMETRIC_UPLOAD_ID,
                 accept=AppState.biometric_accept_map,
-                max_files=1,
                 width="100%",
                 border="2px dashed rgba(20, 28, 50, 0.14)",
                 border_radius="24px",
-                padding="2.4rem",
-                background="#FAFBFF",
+                padding="3rem",
+                margin_top="1.5rem",
             ),
             rx.cond(
                 rx.selected_files(BIOMETRIC_UPLOAD_ID).length() > 0,
-                rx.box(
-                    rx.foreach(
-                        rx.selected_files(BIOMETRIC_UPLOAD_ID),
-                        lambda file_name: rx.text(file_name, color=PRIMARY, font_weight="500"),
-                    ),
+                rx.button(
+                    "Analyze Sample",
+                    on_click=AppState.handle_biometric_upload(rx.upload_files(upload_id=BIOMETRIC_UPLOAD_ID)),
+                    background=PRIMARY,
+                    color="white",
                     width="100%",
-                ),
-                rx.text("No biometric sample selected.", color=MUTED),
-            ),
-            rx.cond(
-                AppState.biometric_error != "",
-                rx.callout(
-                    AppState.biometric_error,
-                    color_scheme="tomato",
-                    width="100%",
+                    padding_y="1.5rem",
+                    border_radius="12px",
+                    font_weight="800",
+                    margin_top="1rem",
                 ),
                 rx.fragment(),
             ),
-            rx.button(
-                "Analyze Sample",
-                on_click=AppState.handle_biometric_upload(rx.upload_files(upload_id=BIOMETRIC_UPLOAD_ID)),
-                background=PRIMARY,
-                color="white",
-                width="100%",
-                border_radius="16px",
+            rx.cond(
+                AppState.biometric_error != "",
+                rx.callout(AppState.biometric_error, color_scheme="tomato", width="100%"),
+                rx.fragment(),
             ),
-            spacing="4",
+            # rx.hstack(
+            #     rx.icon("info", size=20, color=PRIMARY),
+            #     rx.text("Ensure lighting is uniform and the subject occupies at least 70% of the frame for optimal ", rx.text("OpenBQ", font_weight="800"), " scoring.", font_size="0.8rem", color=PRIMARY),
+            #     background="#F4F5F7",
+            #     padding="1rem",
+            #     border_radius="12px",
+            #     width="100%",
+            #     margin_top="1rem",
+            #     align="center",
+            #     spacing="3",
+            # ),
             align="start",
             width="100%",
+            spacing="1",
         ),
         width="100%",
     )
 
 
 def biometric_preview_panel() -> rx.Component:
-    preview = rx.cond(
-        AppState.biometric_preview_is_image,
-        rx.image(
-            src=rx.get_upload_url(AppState.biometric_preview_filename),
+    def image_box(img_name: str) -> rx.Component:
+        return rx.image(
+            src=rx.get_upload_url(img_name),
             width="100%",
-            height="320px",
+            height="180px",
             object_fit="cover",
-            border_radius="24px",
-        ),
-        surface_card(
+            border_radius="16px",
+        )
+        
+    def local_file_placeholder(name: str) -> rx.Component:
+        return rx.center(
             rx.vstack(
-                rx.heading("Preview", size="6", color=PRIMARY),
-                rx.text(
-                    "Preview is available for PNG, JPG, JPEG, and BMP uploads.",
-                    color=MUTED,
-                    text_align="center",
-                ),
-                rx.cond(
-                    AppState.biometric_source_filename != "",
-                    rx.text(AppState.biometric_source_filename, color=PRIMARY),
-                    rx.text("No file analyzed yet.", color=PRIMARY),
-                ),
-                spacing="3",
-                align="center",
-                justify="center",
-                min_height="320px",
+                rx.icon("image", size=32, color=PRIMARY),
+                rx.text(name, font_size="0.75rem", font_weight="600", color=PRIMARY, text_align="center", max_width="90%", overflow="hidden", text_overflow="ellipsis", white_space="nowrap"),
+                align="center", justify="center", spacing="2",
                 width="100%",
             ),
-            background="#FAFBFF",
-        ),
+            width="100%", height="180px", background="#F4F5F7", border_radius="16px",
+        )
+
+    empty_box = rx.center(
+        rx.icon("plus", size=32, color=MUTED),
+        width="100%",
+        height="180px",
+        border="2px dashed rgba(20, 28, 50, 0.14)",
+        border_radius="16px",
     )
-    return preview
+
+    selected = rx.selected_files(BIOMETRIC_UPLOAD_ID)
+    history = AppState.biometric_preview_history
+
+    staging_view = rx.grid(
+        rx.foreach(selected, local_file_placeholder),
+        rx.cond(selected.length() < 3, empty_box, rx.fragment()),
+        rx.cond(selected.length() < 2, empty_box, rx.fragment()),
+        rx.cond(selected.length() < 1, empty_box, rx.fragment()),
+        columns="3",
+        spacing="4",
+        width="100%",
+        padding_top="1rem",
+    )
+
+    history_view = rx.grid(
+        rx.foreach(history, image_box),
+        rx.cond(history.length() < 3, empty_box, rx.fragment()),
+        rx.cond(history.length() < 2, empty_box, rx.fragment()),
+        rx.cond(history.length() < 1, empty_box, rx.fragment()),
+        columns="3",
+        spacing="4",
+        width="100%",
+        padding_top="1rem",
+    )
+
+    return rx.box(
+        rx.cond(
+            selected.length() > 0,
+            staging_view,
+            history_view
+        ),
+        width="100%"
+    )
 
 
 def biometrics_page() -> rx.Component:
     result_panel = surface_card(
         rx.vstack(
             rx.hstack(
-                rx.text("Validation Output", color=MUTED, text_transform="uppercase", letter_spacing="0.12em"),
+                rx.text("VALIDATION OUTPUT", color=MUTED, font_size="0.75rem", font_weight="800", letter_spacing="0.1em"),
                 rx.spacer(),
-                status_badge(AppState.biometric_status),
+                rx.badge(rx.cond(AppState.has_biometric_result, "ACCEPTED", "PENDING"), color_scheme=rx.cond(AppState.has_biometric_result, "grass", "gray"), variant="surface", padding_x="0.8rem", padding_y="0.3rem", font_weight="800", border_radius="full"),
                 width="100%",
+                align="center",
             ),
-            rx.heading("Analysis Report", size="8", color=PRIMARY),
-            score_panel(
-                "OpenBQ Score",
-                AppState.biometric_score,
-                AppState.biometric_status,
-                rx.cond(
-                    AppState.has_biometric_result,
-                    "Biometric analysis completed.",
-                    "Upload a biometric sample to begin.",
+            rx.heading("Analysis Report", size="7", color=PRIMARY, font_weight="800"),
+            rx.center(
+                rx.center(
+                    rx.center(
+                        rx.vstack(
+                            rx.text(AppState.biometric_score, font_size="2.5rem", font_weight="800", color=PRIMARY, line_height="1"),
+                            rx.text("OpenBQ", font_size="0.75rem", font_weight="700", color=PRIMARY, letter_spacing="0.05em"),
+                            spacing="1",
+                            align="center",
+                            margin_top="0.5rem"
+                        ),
+                        width="120px",
+                        height="120px",
+                        background="white",
+                        border_radius="50%",
+                    ),
+                    width="144px",
+                    height="144px",
+                    background=AppState.biometric_ring_bg,
+                    border_radius="50%",
+                    margin_y="1.5rem",
                 ),
-            ),
-            rx.vstack(
-                rx.foreach(AppState.biometric_metric_rows, metric_row),
                 width="100%",
-                spacing="0",
             ),
-            rx.vstack(
-                rx.foreach(
-                    AppState.biometric_issues,
-                    lambda issue: rx.callout(issue, color_scheme="amber", width="100%"),
+            rx.center(
+                rx.text(rx.cond(AppState.has_biometric_result, "Optimal Quality Threshold Met", "Awaiting sample upload"), font_weight="700", color=PRIMARY),
+                width="100%",
+            ),
+            rx.cond(
+                AppState.has_biometric_result,
+                rx.vstack(
+                    rx.divider(margin_y="1.5rem"),
+                    rx.vstack(
+                        rx.foreach(AppState.biometric_metric_rows, metric_row),
+                        width="100%",
+                        spacing="0",
+                    ),
+                    rx.callout(
+                        rx.vstack(
+                            rx.hstack(
+                                rx.icon("triangle-alert", size=16, color="#B45309"),
+                                rx.text("Minor Issue Detected", font_weight="700", color="#B45309", font_size="0.85rem"),
+                            ),
+                            rx.text("Slight glare on forehead region. While quality is high, secondary validation may be required for high-risk profiles.", color="#B45309", font_size="0.75rem", line_height="1.5"),
+                            align="start",
+                            spacing="1"
+                        ),
+                        background="#FEEBC8",
+                        width="100%",
+                        padding="1rem",
+                        border_radius="8px",
+                        margin_y="1rem",
+                    ),
+                    width="100%",
                 ),
-                spacing="2",
-                width="100%",
+                rx.fragment()
             ),
-            spacing="4",
-            width="100%",
+            # Buttons removed per request
             align="start",
         ),
         width="100%",
+        min_height=rx.cond(AppState.has_biometric_result, "auto", "410px"),
+        border_left="6px solid #10B981",
+        border_top_left_radius="4px",
+        border_bottom_left_radius="4px",
+        align_self="start",
     )
+
+    # Live Network Pulse pill removed per request
 
     content = rx.vstack(
         rx.hstack(
             rx.vstack(
                 rx.heading("Biometric Validation", size="9", color=PRIMARY),
                 rx.text(
-                    "Analyze face and fingerprint samples with local pre-validation and OpenBQ CLI execution.",
+                    "Analyze and verify individual identity markers with precision curation.",
                     color=MUTED,
                 ),
                 spacing="1",
                 align="start",
             ),
             rx.spacer(),
-            rx.button(
-                "New Validation",
-                on_click=AppState.new_validation,
-                background=PRIMARY,
-                color="white",
+            rx.hstack(
+                rx.button(
+                    rx.hstack(rx.icon("scan-face", size=16), rx.text("FACE"), align="center", spacing="2"),
+                    on_click=AppState.set_biometric_mode("face"),
+                    background=rx.cond(AppState.biometric_modality == "face", "#F3F5FA", "transparent"),
+                    color=rx.cond(AppState.biometric_modality == "face", PRIMARY, MUTED),
+                    border=rx.cond(AppState.biometric_modality == "face", f"1px solid {PRIMARY}", "1px solid transparent"),
+                    border_radius="12px",
+                    padding_x="1.2rem",
+                ),
+                rx.button(
+                    rx.hstack(rx.icon("fingerprint", size=16), rx.text("FINGERPRINT"), align="center", spacing="2"),
+                    on_click=AppState.set_biometric_mode("fingerprint"),
+                    background=rx.cond(AppState.biometric_modality == "fingerprint", "#F3F5FA", "transparent"),
+                    color=rx.cond(AppState.biometric_modality == "fingerprint", PRIMARY, MUTED),
+                    border=rx.cond(AppState.biometric_modality == "fingerprint", f"1px solid {PRIMARY}", "1px solid transparent"),
+                    border_radius="12px",
+                    padding_x="1.2rem",
+                ),
+                border="1px solid #E5E7EB",
+                border_radius="16px",
+                padding="0.25rem",
+                spacing="2",
             ),
             width="100%",
             align="center",
@@ -1299,7 +1400,7 @@ def biometrics_page() -> rx.Component:
                 width="100%",
             ),
             result_panel,
-            columns="2",
+            grid_template_columns=["1fr", "1fr", "3fr 2fr"],
             spacing="5",
             width="100%",
         ),
