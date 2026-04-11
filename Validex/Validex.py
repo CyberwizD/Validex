@@ -1121,7 +1121,7 @@ def demographics_page() -> rx.Component:
             ),
             rx.spacer(),
             rx.button(
-                "New Validation",
+                "Configure Rules",
                 on_click=AppState.new_validation,
                 background=PRIMARY,
                 color="white",
