@@ -7,6 +7,16 @@ from typing import Any
 FIELD_WEIGHT = round(100 / 6, 2)
 
 
+DEFAULT_DEMOGRAPHIC_RULES = [
+    {"id": "name_length", "name": "Name Length Check", "description": "Ensures first and last names are between 2 and 50 characters in length.", "enabled": True},
+    {"id": "name_format", "name": "Name Format Verification", "description": "Checks for illegal characters or sequential digits inside names.", "enabled": True},
+    {"id": "dob_future", "name": "Future Date Restriction", "description": "Rejects any birth dates that are algorithmically derived to be in the future.", "enabled": True},
+    {"id": "age_dob_align", "name": "Age/DOB Coherence", "description": "Flags mismatch logic between explicitly stated age and implicit Date of Birth.", "enabled": True},
+    {"id": "phone_format", "name": "Phone Standards", "description": "Validates phone number lengths and strict numeric pattern constraints.", "enabled": True},
+    {"id": "email_domain", "name": "Email Domain Check", "description": "Ensures the email address structure contains a valid, strict top-level root domain.", "enabled": True},
+]
+
+
 @dataclass(slots=True)
 class ManualDemographicInput:
     first_name: str = ""
