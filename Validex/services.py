@@ -98,23 +98,24 @@ def build_summary(
     return f"{band} validation quality. All inspected fields passed."
 
 
-def validate_name(value: str, label: str) -> FieldValidationResult:
+def validate_name(value: str, label: str, rules: set[str]) -> FieldValidationResult:
     raw = value.strip()
     if not raw:
         return FieldValidationResult(label, "", "Missing", [f"{label} is required."], 0.0)
     issues: list[str] = []
-    if len(raw) < 2 or len(raw) > 50:
+    if "name_length" in rules and (len(raw) < 2 or len(raw) > 50):
         issues.append(f"{label} must be between 2 and 50 characters.")
-    if any(char.isdigit() for char in raw):
-        issues.append(f"{label} cannot contain digits.")
-    if not NAME_PATTERN.match(raw):
-        issues.append(f"{label} allows letters, spaces, hyphens, and apostrophes only.")
+    if "name_format" in rules:
+        if any(char.isdigit() for char in raw):
+            issues.append(f"{label} cannot contain digits.")
+        if not NAME_PATTERN.match(raw):
+            issues.append(f"{label} allows letters, spaces, hyphens, and apostrophes only.")
     status = "Fail" if issues else "Pass"
     score = 0.0 if issues else FIELD_WEIGHT
     return FieldValidationResult(label, raw, status, issues, score)
 
 
-def validate_dob(value: str) -> tuple[FieldValidationResult, date | None]:
+def validate_dob(value: str, rules: set[str]) -> tuple[FieldValidationResult, date | None]:
     raw = value.strip()
     if not raw:
         return (
@@ -131,20 +132,20 @@ def validate_dob(value: str) -> tuple[FieldValidationResult, date | None]:
     issues: list[str] = []
     if parsed is None:
         issues.append("Date of Birth must use YYYY-MM-DD, DD/MM/YYYY, or MM/DD/YYYY.")
-    elif parsed > date.today():
+    elif "dob_future" in rules and parsed > date.today():
         issues.append("Date of Birth cannot be in the future.")
     else:
         derived_age = date.today().year - parsed.year - (
             (date.today().month, date.today().day) < (parsed.month, parsed.day)
         )
-        if derived_age < 0 or derived_age > 150:
+        if "dob_future" in rules and (derived_age < 0 or derived_age > 150):
             issues.append("Derived age must be between 0 and 150 years.")
     status = "Fail" if issues else "Pass"
     score = 0.0 if issues else FIELD_WEIGHT
     return FieldValidationResult("Date of Birth", raw, status, issues, score), parsed
 
 
-def validate_age(value: str, parsed_dob: date | None) -> FieldValidationResult:
+def validate_age(value: str, parsed_dob: date | None, rules: set[str]) -> FieldValidationResult:
     raw = value.strip()
     if not raw:
         return FieldValidationResult("Age", "", "Missing", ["Age is required."], 0.0)
@@ -156,7 +157,7 @@ def validate_age(value: str, parsed_dob: date | None) -> FieldValidationResult:
     issues: list[str] = []
     status = "Pass"
     score = FIELD_WEIGHT
-    if parsed_dob:
+    if "age_dob_align" in rules and parsed_dob:
         derived_age = date.today().year - parsed_dob.year - (
             (date.today().month, date.today().day) < (parsed_dob.month, parsed_dob.day)
         )
@@ -167,7 +168,7 @@ def validate_age(value: str, parsed_dob: date | None) -> FieldValidationResult:
     return FieldValidationResult("Age", raw, status, issues, score)
 
 
-def validate_phone(value: str) -> FieldValidationResult:
+def validate_phone(value: str, rules: set[str]) -> FieldValidationResult:
     raw = value.strip()
     if not raw:
         return FieldValidationResult(
@@ -178,48 +179,56 @@ def validate_phone(value: str) -> FieldValidationResult:
             0.0,
         )
     issues: list[str] = []
-    if any(char.isalpha() for char in raw):
-        issues.append("Phone Number cannot contain alphabetic characters.")
-    digits = PHONE_STRIP_PATTERN.sub("", raw)
-    if not digits.isdigit() or len(digits) < 7 or len(digits) > 15:
-        issues.append("Phone Number must resolve to 7 to 15 digits.")
+    if "phone_format" in rules:
+        if any(char.isalpha() for char in raw):
+            issues.append("Phone Number cannot contain alphabetic characters.")
+        digits = PHONE_STRIP_PATTERN.sub("", raw)
+        if not digits.isdigit() or len(digits) < 7 or len(digits) > 15:
+            issues.append("Phone Number must resolve to 7 to 15 digits.")
     status = "Fail" if issues else "Pass"
     score = 0.0 if issues else FIELD_WEIGHT
     return FieldValidationResult("Phone Number", raw, status, issues, score)
 
 
-def validate_email(value: str) -> FieldValidationResult:
+def validate_email(value: str, rules: set[str]) -> FieldValidationResult:
     raw = value.strip()
     if not raw:
         return FieldValidationResult("Email", "", "Missing", ["Email is required."], 0.0)
-    if not EMAIL_PATTERN.match(raw):
-        return FieldValidationResult(
-            "Email",
-            raw,
-            "Fail",
-            ["Email must match a standard address pattern."],
-            0.0,
-        )
-    if "." not in raw.rsplit("@", 1)[-1]:
-        return FieldValidationResult(
-            "Email",
-            raw,
-            "Warning",
-            ["Email domain must contain a dot."],
-            round(FIELD_WEIGHT * 0.5, 2),
-        )
+    
+    if "email_domain" in rules:
+        if not EMAIL_PATTERN.match(raw):
+            return FieldValidationResult(
+                "Email",
+                raw,
+                "Fail",
+                ["Email must match a standard address pattern."],
+                0.0,
+            )
+        if "." not in raw.rsplit("@", 1)[-1]:
+            return FieldValidationResult(
+                "Email",
+                raw,
+                "Warning",
+                ["Email domain must contain a dot."],
+                round(FIELD_WEIGHT * 0.5, 2),
+            )
     return FieldValidationResult("Email", raw, "Pass", [], FIELD_WEIGHT)
 
 
-def validate_demographic_input(payload: ManualDemographicInput) -> DemographicValidationResult:
-    dob_result, parsed_dob = validate_dob(payload.date_of_birth)
+def validate_demographic_input(
+    payload: ManualDemographicInput, 
+    rules: set[str] | None = None
+) -> DemographicValidationResult:
+    if rules is None:
+        rules = {"name_length", "name_format", "dob_future", "age_dob_align", "phone_format", "email_domain"}
+    dob_result, parsed_dob = validate_dob(payload.date_of_birth, rules)
     fields = [
-        validate_name(payload.first_name, "First Name"),
-        validate_name(payload.last_name, "Last Name"),
+        validate_name(payload.first_name, "First Name", rules),
+        validate_name(payload.last_name, "Last Name", rules),
         dob_result,
-        validate_age(payload.age, parsed_dob),
-        validate_phone(payload.phone),
-        validate_email(payload.email),
+        validate_age(payload.age, parsed_dob, rules),
+        validate_phone(payload.phone, rules),
+        validate_email(payload.email, rules),
     ]
     total_score = round(sum(field.field_score for field in fields), 2)
     return DemographicValidationResult(
