@@ -1022,6 +1022,7 @@ def rules_configuration_modal() -> rx.Component:
             max_width="600px",
             border_radius="24px",
             padding="2rem",
+            background="#F3F4F6",
         ),
         open=AppState.rules_modal_open,
         on_open_change=AppState.set_rules_modal_open,
