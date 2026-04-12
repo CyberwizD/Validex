@@ -6,7 +6,7 @@ from typing import Any
 import reflex as rx
 
 from .db import fetch_demographic_records, init_database, insert_biometric_record, insert_demographic_record
-from .models import BiometricValidationRequest, ManualDemographicInput
+from .models import DEFAULT_DEMOGRAPHIC_RULES, BiometricValidationRequest, ManualDemographicInput
 from .services import (
     apply_duplicate_match,
     build_batch_row_result,
@@ -145,6 +145,27 @@ class AppState(rx.State):
     def route_to_biometrics(self):
         self.validation_modal_open = False
         return rx.redirect("/biometrics")
+        
+    rules_modal_open: bool = False
+    active_rules: list[dict[str, Any]] = DEFAULT_DEMOGRAPHIC_RULES.copy()
+
+    def open_rules_modal(self) -> None:
+        self.rules_modal_open = True
+        
+    def close_rules_modal(self) -> None:
+        self.rules_modal_open = False
+
+    def toggle_rule(self, rule_id: str, new_value: bool) -> None:
+        for idx, r in enumerate(self.active_rules):
+            if r["id"] == rule_id:
+                # Need to explicitly clone the inner dict so it mutates functionally in reflex state
+                new_rule = self.active_rules[idx].copy()
+                new_rule["enabled"] = new_value
+                self.active_rules[idx] = new_rule
+                break
+                
+    def reset_rules(self) -> None:
+        self.active_rules = DEFAULT_DEMOGRAPHIC_RULES.copy()
 
     def reset_manual_form(self) -> None:
         self.first_name = ""
@@ -214,7 +235,8 @@ class AppState(rx.State):
             phone=self.phone,
             email=self.email,
         )
-        result = validate_demographic_input(payload)
+        enabled_rule_ids = {r["id"] for r in self.active_rules if r["enabled"]}
+        result = validate_demographic_input(payload, enabled_rule_ids)
         result = apply_duplicate_match(payload, result, fetch_demographic_records())
         insert_demographic_record(payload, result, "manual")
         self.manual_score = result.validation_score
@@ -249,9 +271,12 @@ class AppState(rx.State):
         existing_records = fetch_demographic_records()
         batch_rows: list[dict[str, Any]] = []
         batch_row_models = []
+        
+        enabled_rule_ids = {r["id"] for r in self.active_rules if r["enabled"]}
+        
         for index, row in enumerate(rows, start=1):
             payload = payload_from_csv_row(row, header_map)
-            result = apply_duplicate_match(payload, validate_demographic_input(payload), existing_records)
+            result = apply_duplicate_match(payload, validate_demographic_input(payload, enabled_rule_ids), existing_records)
             record_id = insert_demographic_record(payload, result, saved_name)
             batch_row = build_batch_row_result(payload, result, index)
             batch_row_models.append(batch_row)
@@ -930,6 +955,79 @@ def batch_upload_card() -> rx.Component:
     )
 
 
+def rules_configuration_modal() -> rx.Component:
+    def rule_item(rule: dict) -> rx.Component:
+        return rx.hstack(
+            rx.vstack(
+                rx.text(rule["name"], font_weight="700", color=PRIMARY, font_size="0.95rem"),
+                rx.text(rule["description"], color=MUTED, font_size="0.85rem"),
+                spacing="1",
+                align="start",
+            ),
+            rx.spacer(),
+            rx.switch(
+                checked=rule["enabled"], 
+                on_change=lambda val: AppState.toggle_rule(rule["id"], val),
+                color_scheme="amber",
+                cursor="pointer",
+            ),
+            width="100%",
+            align="center",
+            padding_y="1rem",
+            border_bottom="1px solid #E5E7EB",
+        )
+
+    return rx.dialog.root(
+        rx.dialog.content(
+            rx.vstack(
+                rx.hstack(
+                    rx.heading("Configure Validation Rules", size="6", color=PRIMARY, font_weight="800"),
+                    rx.spacer(),
+                    rx.dialog.close(
+                        rx.icon("x", color=MUTED, cursor="pointer"),
+                    ),
+                    width="100%",
+                    align="center",
+                ),
+                rx.text("Toggle demographic validation logic constraints.", color=MUTED, font_size="0.9rem", margin_bottom="1rem"),
+                
+                rx.vstack(
+                    rx.foreach(AppState.active_rules, rule_item),
+                    width="100%",
+                    spacing="0",
+                    border_top="1px solid #E5E7EB",
+                ),
+                
+                rx.hstack(
+                    rx.button(
+                        "Reset to Defaults",
+                        on_click=AppState.reset_rules,
+                        background="transparent",
+                        color=MUTED,
+                        cursor="pointer",
+                        variant="ghost",
+                        _hover={"color": PRIMARY},
+                    ),
+                    rx.spacer(),
+                    rx.dialog.close(
+                        rx.button("Save & Apply", background=PRIMARY, color="white", cursor="pointer"),
+                    ),
+                    width="100%",
+                    margin_top="1.5rem",
+                    align="center",
+                ),
+                width="100%",
+                align="start",
+            ),
+            max_width="600px",
+            border_radius="24px",
+            padding="2rem",
+        ),
+        open=AppState.rules_modal_open,
+        on_open_change=AppState.set_rules_modal_open,
+    )
+
+
 def demographics_page() -> rx.Component:
     summary_grid = rx.grid(
         score_panel(
@@ -1122,7 +1220,7 @@ def demographics_page() -> rx.Component:
             rx.spacer(),
             rx.button(
                 "Configure Rules",
-                on_click=AppState.new_validation,
+                on_click=AppState.open_rules_modal,
                 background=PRIMARY,
                 color="white",
             ),
@@ -1139,6 +1237,7 @@ def demographics_page() -> rx.Component:
         ),
         summary_grid,
         batch_results,
+        rules_configuration_modal(),
         spacing="5",
         width="100%",
     )
