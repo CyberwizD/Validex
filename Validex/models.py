@@ -4,7 +4,7 @@ from dataclasses import asdict, dataclass, field
 from typing import Any
 
 
-FIELD_WEIGHT = round(100 / 6, 2)
+FIELD_WEIGHT = 100 / 6
 
 
 DEFAULT_DEMOGRAPHIC_RULES = [
