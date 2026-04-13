@@ -611,12 +611,13 @@ def batch_row(row: dict[str, Any]) -> rx.Component:
         rx.text("-", color=MUTED),
     )
     return rx.table.row(
-        rx.table.cell(rx.hstack(rx.text("#"), rx.text(row["row_number"]), spacing="1")),
-        rx.table.cell(row["record_name"]),
+        rx.table.cell(rx.hstack(rx.text("#", color=MUTED, font_weight="600"), rx.text(row["row_number"], color=PRIMARY, font_weight="600"), spacing="1", align="center")),
+        rx.table.cell(rx.text(row["record_name"], color=PRIMARY, font_weight="600")),
         rx.table.cell(status_badge(row["status"])),
         rx.table.cell(percent_value(row["score"])),
-        rx.table.cell(row["issues_text"], color=MUTED, max_width="320px"),
+        rx.table.cell(rx.text(row["issues_text"], color=MUTED, font_size="0.9rem"), max_width="320px"),
         rx.table.cell(duplicate_cell),
+        _hover={"background": "#F9FAFB"},
     )
 
 
@@ -1166,29 +1167,37 @@ def demographics_page() -> rx.Component:
                     width="100%",
                 ),
                 rx.grid(
-                    surface_card(
-                        rx.text("Total Records", color=MUTED),
+                    rx.box(
+                        rx.text("Total Records", color=MUTED, font_size="0.85rem", font_weight="600"),
                         rx.heading(AppState.batch_summary["total_records"], size="7", color=PRIMARY),
-                        padding="1rem",
-                        box_shadow="none",
+                        padding="1.25rem",
+                        background="white",
+                        border="1.5px solid rgba(15, 23, 42, 0.12)",
+                        border_radius="16px",
                     ),
-                    surface_card(
-                        rx.text("Passed", color=MUTED),
+                    rx.box(
+                        rx.text("Passed", color=MUTED, font_size="0.85rem", font_weight="600"),
                         rx.heading(AppState.batch_summary["passed_records"], size="7", color=PRIMARY),
-                        padding="1rem",
-                        box_shadow="none",
+                        padding="1.25rem",
+                        background="white",
+                        border="1.5px solid rgba(15, 23, 42, 0.12)",
+                        border_radius="16px",
                     ),
-                    surface_card(
-                        rx.text("Warnings", color=MUTED),
+                    rx.box(
+                        rx.text("Warnings", color=MUTED, font_size="0.85rem", font_weight="600"),
                         rx.heading(AppState.batch_summary["warning_records"], size="7", color=PRIMARY),
-                        padding="1rem",
-                        box_shadow="none",
+                        padding="1.25rem",
+                        background="white",
+                        border="1.5px solid rgba(15, 23, 42, 0.12)",
+                        border_radius="16px",
                     ),
-                    surface_card(
-                        rx.text("Average Score", color=MUTED),
+                    rx.box(
+                        rx.text("Average Score", color=MUTED, font_size="0.85rem", font_weight="600"),
                         rx.heading(AppState.batch_summary["average_validation_score"], size="7", color=PRIMARY),
-                        padding="1rem",
-                        box_shadow="none",
+                        padding="1.25rem",
+                        background="white",
+                        border="1.5px solid rgba(15, 23, 42, 0.12)",
+                        border_radius="16px",
                     ),
                     columns="4",
                     spacing="3",
