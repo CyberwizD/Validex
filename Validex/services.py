@@ -30,12 +30,29 @@ NAME_PATTERN = re.compile(r"^[A-Za-z][A-Za-z\s'\-]*[A-Za-z]$|^[A-Za-z]$")
 EMAIL_PATTERN = re.compile(r"^[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}$")
 PHONE_STRIP_PATTERN = re.compile(r"[()\-\s+]")
 CSV_HEADER_ALIASES = {
-    "first_name": {"firstname", "first name", "first_name"},
-    "last_name": {"lastname", "last name", "last_name"},
-    "date_of_birth": {"dob", "date of birth", "date_of_birth"},
-    "age": {"age"},
-    "phone": {"phone", "phone number", "phone_number"},
-    "email": {"email", "email address", "email_address"},
+    "first_name": {
+        "firstname", "first name", "first_name", "first",
+        "given name", "given_name", "givenname", "forename",
+    },
+    "last_name": {
+        "lastname", "last name", "last_name", "last",
+        "surname", "family name", "family_name", "familyname",
+    },
+    "date_of_birth": {
+        "dob", "date of birth", "date_of_birth", "dateofbirth",
+        "birth date", "birth_date", "birthdate", "birthday",
+    },
+    "age": {"age", "years", "years old"},
+    "phone": {
+        "phone", "phone number", "phone_number", "phonenumber",
+        "mobile", "mobile number", "mobile_number", "mobilenumber",
+        "cell", "cellphone", "cell phone", "cell_phone",
+        "telephone", "tel", "contact number", "contact_number",
+    },
+    "email": {
+        "email", "email address", "email_address", "emailaddress",
+        "e mail", "e-mail", "mail",
+    },
 }
 FACE_EXTENSIONS = {".jpg", ".jpeg", ".jp2", ".bmp", ".png"}
 FINGERPRINT_EXTENSIONS = {".wsq", ".png"}
@@ -43,7 +60,7 @@ BIOMETRIC_THRESHOLDS = {"accepted": 80, "review": 55}
 
 
 def normalize_header(header: str) -> str:
-    return header.strip().lower().replace("_", " ")
+    return header.strip().lower().replace("_", " ").replace("-", " ")
 
 
 def map_csv_headers(headers: list[str]) -> dict[str, str]:
@@ -217,19 +234,55 @@ def validate_email(value: str, rules: set[str]) -> FieldValidationResult:
 
 def validate_demographic_input(
     payload: ManualDemographicInput, 
-    rules: set[str] | None = None
+    rules: set[str] | None = None,
+    present_fields: set[str] | None = None,
 ) -> DemographicValidationResult:
+    """Validate a demographic input payload.
+    
+    Args:
+        payload: The input data to validate.
+        rules: Which validation rules are enabled.
+        present_fields: Which of the 6 canonical fields are actually present
+            in the source data (CSV headers). When None (e.g. manual entry),
+            all 6 fields are validated. When provided, only those fields are
+            scored and the weight per field adjusts so the total still sums
+            to 100.
+    """
     if rules is None:
         rules = {"name_length", "name_format", "dob_future", "age_dob_align", "phone_format", "email_domain"}
+
+    all_canonical = {"first_name", "last_name", "date_of_birth", "age", "phone", "email"}
+    active_fields = present_fields if present_fields is not None else all_canonical
+    field_count = len(active_fields) or 1
+    dynamic_weight = round(100.0 / field_count, 4)
+
     dob_result, parsed_dob = validate_dob(payload.date_of_birth, rules)
-    fields = [
-        validate_name(payload.first_name, "First Name", rules),
-        validate_name(payload.last_name, "Last Name", rules),
-        dob_result,
-        validate_age(payload.age, parsed_dob, rules),
-        validate_phone(payload.phone, rules),
-        validate_email(payload.email, rules),
-    ]
+
+    fields: list[FieldValidationResult] = []
+    if "first_name" in active_fields:
+        result = validate_name(payload.first_name, "First Name", rules)
+        result.field_score = _rescale_score(result.field_score, FIELD_WEIGHT, dynamic_weight)
+        fields.append(result)
+    if "last_name" in active_fields:
+        result = validate_name(payload.last_name, "Last Name", rules)
+        result.field_score = _rescale_score(result.field_score, FIELD_WEIGHT, dynamic_weight)
+        fields.append(result)
+    if "date_of_birth" in active_fields:
+        dob_result.field_score = _rescale_score(dob_result.field_score, FIELD_WEIGHT, dynamic_weight)
+        fields.append(dob_result)
+    if "age" in active_fields:
+        result = validate_age(payload.age, parsed_dob, rules)
+        result.field_score = _rescale_score(result.field_score, FIELD_WEIGHT, dynamic_weight)
+        fields.append(result)
+    if "phone" in active_fields:
+        result = validate_phone(payload.phone, rules)
+        result.field_score = _rescale_score(result.field_score, FIELD_WEIGHT, dynamic_weight)
+        fields.append(result)
+    if "email" in active_fields:
+        result = validate_email(payload.email, rules)
+        result.field_score = _rescale_score(result.field_score, FIELD_WEIGHT, dynamic_weight)
+        fields.append(result)
+
     total_score = round(sum(field.field_score for field in fields), 2)
     return DemographicValidationResult(
         fields=fields,
@@ -237,6 +290,14 @@ def validate_demographic_input(
         score_band=score_band(total_score),
         summary=build_summary(total_score, {field.status for field in fields}, None),
     )
+
+
+def _rescale_score(original: float, old_weight: float, new_weight: float) -> float:
+    """Proportionally rescale a field score from old_weight to new_weight."""
+    if old_weight == 0:
+        return 0.0
+    ratio = original / old_weight  # 0.0, 0.5 or 1.0 typically
+    return round(ratio * new_weight, 4)
 
 
 def levenshtein_distance(left: str, right: str) -> int:
