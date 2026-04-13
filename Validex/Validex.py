@@ -324,7 +324,8 @@ class AppState(rx.State):
                 source_filename=filename,
             )
             try:
-                result = run_openbq_analysis(request, saved_path, saved_name)
+                import asyncio
+                result = await asyncio.to_thread(run_openbq_analysis, request, saved_path, saved_name)
                 insert_biometric_record(result)
                 self.biometric_score = result.overall_score
                 self.biometric_status = result.status
