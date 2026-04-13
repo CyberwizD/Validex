@@ -105,6 +105,24 @@ class AppState(rx.State):
         return f"conic-gradient(#141C32 {score_val}%, #E5E7EB {score_val}% 100%)"
 
     @rx.var
+    def biometric_badge_color(self) -> str:
+        if not self.has_biometric_result: return "gray"
+        if self.biometric_status == "Accepted": return "grass"
+        if self.biometric_status in ("Rejected", "Failed"): return "tomato"
+        return "orange"
+        
+    @rx.var
+    def biometric_badge_text(self) -> str:
+        return self.biometric_status.upper() if self.has_biometric_result else "PENDING"
+        
+    @rx.var
+    def biometric_status_message(self) -> str:
+        if not self.has_biometric_result: return "Awaiting sample upload"
+        if self.biometric_status == "Accepted": return "Optimal Quality Threshold Met"
+        if self.biometric_status == "Failed": return "Analysis Failed"
+        return "Quality Threshold Not Met"
+
+    @rx.var
     def batch_total_pages(self) -> int:
         if not self.batch_results_rows:
             return 1
@@ -1402,7 +1420,7 @@ def biometrics_page() -> rx.Component:
             rx.hstack(
                 rx.text("VALIDATION OUTPUT", color=MUTED, font_size="0.75rem", font_weight="800", letter_spacing="0.1em"),
                 rx.spacer(),
-                rx.badge(rx.cond(AppState.has_biometric_result, "ACCEPTED", "PENDING"), color_scheme=rx.cond(AppState.has_biometric_result, "grass", "gray"), variant="surface", padding_x="0.8rem", padding_y="0.3rem", font_weight="800", border_radius="full"),
+                rx.badge(AppState.biometric_badge_text, color_scheme=AppState.biometric_badge_color, variant="surface", padding_x="0.8rem", padding_y="0.3rem", font_weight="800", border_radius="full"),
                 width="100%",
                 align="center",
             ),
@@ -1431,7 +1449,7 @@ def biometrics_page() -> rx.Component:
                 width="100%",
             ),
             rx.center(
-                rx.text(rx.cond(AppState.has_biometric_result, "Optimal Quality Threshold Met", "Awaiting sample upload"), font_weight="700", color=PRIMARY),
+                rx.text(AppState.biometric_status_message, font_weight="700", color=PRIMARY),
                 width="100%",
             ),
             rx.cond(
@@ -1443,21 +1461,25 @@ def biometrics_page() -> rx.Component:
                         width="100%",
                         spacing="0",
                     ),
-                    rx.callout(
-                        rx.vstack(
-                            rx.hstack(
-                                rx.icon("triangle-alert", size=16, color="#B45309"),
-                                rx.text("Minor Issue Detected", font_weight="700", color="#B45309", font_size="0.85rem"),
+                    rx.cond(
+                        AppState.biometric_status == "Review",
+                        rx.callout(
+                            rx.vstack(
+                                rx.hstack(
+                                    rx.icon("triangle-alert", size=16, color="#B45309"),
+                                    rx.text("Manual Review Advised", font_weight="700", color="#B45309", font_size="0.85rem"),
+                                ),
+                                rx.text("One or more properties fall just below the optimal thresholds. While viable, secondary validation may be required.", color="#B45309", font_size="0.75rem", line_height="1.5"),
+                                align="start",
+                                spacing="1"
                             ),
-                            rx.text("Slight glare on forehead region. While quality is high, secondary validation may be required for high-risk profiles.", color="#B45309", font_size="0.75rem", line_height="1.5"),
-                            align="start",
-                            spacing="1"
+                            background="#FEEBC8",
+                            width="100%",
+                            padding="1rem",
+                            border_radius="8px",
+                            margin_y="1rem",
                         ),
-                        background="#FEEBC8",
-                        width="100%",
-                        padding="1rem",
-                        border_radius="8px",
-                        margin_y="1rem",
+                        rx.fragment()
                     ),
                     width="100%",
                 ),
