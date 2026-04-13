@@ -291,10 +291,11 @@ class AppState(rx.State):
         batch_row_models = []
         
         enabled_rule_ids = {r["id"] for r in self.active_rules if r["enabled"]}
+        present_fields = set(header_map.keys())
         
         for index, row in enumerate(rows, start=1):
             payload = payload_from_csv_row(row, header_map)
-            result = apply_duplicate_match(payload, validate_demographic_input(payload, enabled_rule_ids), existing_records)
+            result = apply_duplicate_match(payload, validate_demographic_input(payload, enabled_rule_ids, present_fields), existing_records)
             record_id = insert_demographic_record(payload, result, saved_name)
             batch_row = build_batch_row_result(payload, result, index)
             batch_row_models.append(batch_row)
