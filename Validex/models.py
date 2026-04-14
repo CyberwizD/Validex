@@ -159,8 +159,9 @@ class BiometricValidationResult:
     overall_score: float
     status: str
     issue_list: list[str]
-    metrics: dict[str, str]
+    metrics: list[dict[str, Any]]
     preview_filename: str
+    face_detected: bool = False
     raw_output: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -172,5 +173,6 @@ class BiometricValidationResult:
             "issue_list": self.issue_list,
             "metrics": self.metrics,
             "preview_filename": self.preview_filename,
+            "face_detected": self.face_detected,
             "raw_output": self.raw_output,
         }
