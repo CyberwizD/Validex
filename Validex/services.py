@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import io
+import json
 import re
 import shutil
 import subprocess
@@ -542,16 +543,138 @@ def _coerce_float(value: Any) -> float | None:
         return None
 
 
+def _coerce_int(value: Any) -> int | None:
+    try:
+        return int(float(value))
+    except (TypeError, ValueError):
+        return None
+
+
+def _metric_row(
+    label: str,
+    value: str,
+    category: str,
+    status: str = "info",
+    row_type: str = "metric",
+) -> dict[str, str]:
+    return {
+        "label": label,
+        "value": value,
+        "category": category,
+        "status": status,
+        "row_type": row_type,
+    }
+
+
+def _category_row(category: str) -> dict[str, str]:
+    return _metric_row(category, "", category, "info", "section")
+
+
+def _format_decimal(value: Any, suffix: str = "", precision: int = 2) -> str:
+    number = _coerce_float(value)
+    if number is None:
+        return "Unavailable"
+    return f"{number:.{precision}f}{suffix}"
+
+
+def _format_percentage(value: Any, scale: float = 100.0, precision: int = 2) -> str:
+    number = _coerce_float(value)
+    if number is None:
+        return "Unavailable"
+    return f"{number * scale:.{precision}f}%"
+
+
+def _format_detection_confidence(value: Any) -> str:
+    number = _coerce_float(value)
+    if number is None:
+        return "No face confidence available"
+    if number <= 1:
+        return f"{number * 100:.2f}%"
+    return f"{number:.2f}%"
+
+
+def _format_file_size(value: Any) -> str:
+    size = _coerce_int(value)
+    if size is None:
+        return "Unavailable"
+    if size < 1024:
+        return f"{size} B"
+    if size < 1024 * 1024:
+        return f"{size / 1024:.1f} KB"
+    return f"{size / (1024 * 1024):.2f} MB"
+
+
+def _format_bool_text(value: Any, true_text: str = "Yes", false_text: str = "No") -> str:
+    if value in (None, ""):
+        return "Unavailable"
+    normalized = str(value).strip().lower()
+    if normalized in {"1", "true", "yes"}:
+        return true_text
+    if normalized in {"0", "false", "no"}:
+        return false_text
+    return str(value)
+
+
+def _metric_status_by_threshold(
+    value: Any,
+    pass_min: float | None = None,
+    warn_min: float | None = None,
+    pass_max: float | None = None,
+    warn_max: float | None = None,
+) -> str:
+    number = _coerce_float(value)
+    if number is None:
+        return "info"
+    if pass_min is not None and number < pass_min:
+        if warn_min is not None and number >= warn_min:
+            return "warn"
+        return "fail"
+    if pass_max is not None and number > pass_max:
+        if warn_max is not None and number <= warn_max:
+            return "warn"
+        return "fail"
+    return "pass"
+
+
+def _pose_direction(value: Any, positive_label: str, negative_label: str) -> str:
+    number = _coerce_float(value)
+    if number is None:
+        return "Unavailable"
+    if abs(number) < 0.5:
+        return "Centered"
+    direction = positive_label if number > 0 else negative_label
+    return f"{abs(number):.2f}° {direction}"
+
+
+def _normalize_brightness_score(value: Any) -> float | None:
+    number = _coerce_float(value)
+    if number is None:
+        return None
+    centered = max(0.0, 100.0 - min(100.0, abs(number - 150.0) / 1.5))
+    return round(centered, 2)
+
+
+def _normalize_openbq_file_ref(value: Any) -> str:
+    if value in (None, ""):
+        return ""
+    normalized = str(value).replace("\\", "/").strip()
+    return normalized.rsplit("/", 1)[-1].lower()
+
+
 def _extract_face_score(metrics: dict[str, Any]) -> float:
     if (quality := _coerce_float(metrics.get("quality"))) is not None:
         return max(0.0, min(100.0, quality))
     factors: list[float] = []
-    for key in ("confidence", "sharpness", "contrast", "dynamic_range"):
+    detection = _coerce_float(metrics.get("face_detection"))
+    if detection is not None:
+        factors.append(max(0.0, min(100.0, detection * 100 if detection <= 1 else detection)))
+    for key in ("sharpness", "contrast", "dynamic_range"):
         value = _coerce_float(metrics.get(key))
         if value is not None:
-            if key == "confidence" and value <= 1:
-                value *= 100
             factors.append(max(0.0, min(100.0, value)))
+    brightness = _normalize_brightness_score(metrics.get("brightness"))
+    if brightness is not None:
+        factors.append(brightness)
     face_ratio = _coerce_float(metrics.get("face_ratio"))
     if face_ratio is not None:
         factors.append(max(0.0, min(100.0, face_ratio * 100)))
@@ -574,33 +697,241 @@ def _status_from_score(score: float) -> str:
     return "Rejected"
 
 
-def _selected_face_metrics(metrics: dict[str, Any]) -> dict[str, str]:
-    keys = ["brightness", "sharpness", "face_ratio", "yaw_degree", "face_offset_x"]
-    return {
-        key.replace("_", " ").title(): str(metrics[key])
-        for key in keys
-        if metrics.get(key) not in (None, "")
-    }
+def _selected_face_metrics(metrics: dict[str, Any]) -> list[dict[str, str]]:
+    rows: list[dict[str, str]] = []
+    face_detection = _coerce_float(metrics.get("face_detection"))
+    face_detected = face_detection is not None and face_detection > 0
+
+    rows.append(_category_row("Image Quality"))
+    rows.extend(
+        [
+            _metric_row(
+                "Brightness",
+                _format_decimal(metrics.get("brightness")),
+                "Image Quality",
+                _metric_status_by_threshold(metrics.get("brightness"), pass_min=90, warn_min=55, pass_max=210, warn_max=235),
+            ),
+            _metric_row(
+                "Sharpness",
+                _format_decimal(metrics.get("sharpness")),
+                "Image Quality",
+                _metric_status_by_threshold(metrics.get("sharpness"), pass_min=80, warn_min=45),
+            ),
+            _metric_row(
+                "Contrast",
+                _format_decimal(metrics.get("contrast")),
+                "Image Quality",
+                _metric_status_by_threshold(metrics.get("contrast"), pass_min=60, warn_min=35),
+            ),
+            _metric_row(
+                "Dynamic Range",
+                _format_decimal(metrics.get("dynamic_range")),
+                "Image Quality",
+                _metric_status_by_threshold(metrics.get("dynamic_range"), pass_min=80, warn_min=45),
+            ),
+        ]
+    )
+
+    rows.append(_category_row("Face Detection"))
+    rows.append(
+        _metric_row(
+            "Face Detected",
+            "Yes" if face_detected else "No",
+            "Face Detection",
+            "pass" if face_detected else "fail",
+        )
+    )
+    rows.append(
+        _metric_row(
+            "Detection Confidence",
+            _format_detection_confidence(metrics.get("face_detection")),
+            "Face Detection",
+            _metric_status_by_threshold(
+                (face_detection * 100) if face_detection is not None and face_detection <= 1 else face_detection,
+                pass_min=60,
+                warn_min=30,
+            ),
+        )
+    )
+    if face_detected:
+        rows.extend(
+            [
+                _metric_row(
+                    "Face Ratio",
+                    _format_percentage(metrics.get("face_ratio")),
+                    "Face Detection",
+                    _metric_status_by_threshold(
+                        (face_detection * 100) if face_detection is not None and face_detection <= 1 else face_detection,
+                        pass_min=60,
+                        warn_min=30,
+                    ) if metrics.get("face_ratio") in (None, "") else _metric_status_by_threshold(
+                        (_coerce_float(metrics.get("face_ratio")) or 0) * 100,
+                        pass_min=18,
+                        warn_min=10,
+                        pass_max=65,
+                        warn_max=80,
+                    ),
+                ),
+                _metric_row(
+                    "Smile",
+                    _format_bool_text(metrics.get("smile"), "Detected", "Not detected"),
+                    "Face Detection",
+                    "info",
+                ),
+            ]
+        )
+
+    if any(metrics.get(key) not in (None, "") for key in ("eye_closed_left", "eye_closed_right", "ipd")):
+        rows.append(_category_row("Eye Analysis"))
+        if metrics.get("eye_closed_left") not in (None, ""):
+            rows.append(
+                _metric_row(
+                    "Left Eye Closed",
+                    _format_bool_text(metrics.get("eye_closed_left")),
+                    "Eye Analysis",
+                    "warn" if _format_bool_text(metrics.get("eye_closed_left")) == "Yes" else "pass",
+                )
+            )
+        if metrics.get("eye_closed_right") not in (None, ""):
+            rows.append(
+                _metric_row(
+                    "Right Eye Closed",
+                    _format_bool_text(metrics.get("eye_closed_right")),
+                    "Eye Analysis",
+                    "warn" if _format_bool_text(metrics.get("eye_closed_right")) == "Yes" else "pass",
+                )
+            )
+        if metrics.get("ipd") not in (None, ""):
+            rows.append(
+                _metric_row(
+                    "Inter-Pupillary Distance",
+                    _format_decimal(metrics.get("ipd"), " px"),
+                    "Eye Analysis",
+                    "info",
+                )
+            )
+
+    if any(metrics.get(key) not in (None, "") for key in ("yaw_degree", "pitch_degree", "roll_degree")):
+        rows.append(_category_row("Head Pose"))
+        if metrics.get("yaw_degree") not in (None, ""):
+            yaw = _coerce_float(metrics.get("yaw_degree")) or 0.0
+            rows.append(
+                _metric_row(
+                    "Yaw",
+                    _pose_direction(yaw, "Right", "Left"),
+                    "Head Pose",
+                    _metric_status_by_threshold(abs(yaw), pass_max=15, warn_max=30),
+                )
+            )
+        if metrics.get("pitch_degree") not in (None, ""):
+            pitch = _coerce_float(metrics.get("pitch_degree")) or 0.0
+            rows.append(
+                _metric_row(
+                    "Pitch",
+                    _pose_direction(pitch, "Down", "Up"),
+                    "Head Pose",
+                    _metric_status_by_threshold(abs(pitch), pass_max=12, warn_max=25),
+                )
+            )
+        if metrics.get("roll_degree") not in (None, ""):
+            roll = _coerce_float(metrics.get("roll_degree")) or 0.0
+            rows.append(
+                _metric_row(
+                    "Roll",
+                    _pose_direction(roll, "Clockwise", "Counter-clockwise"),
+                    "Head Pose",
+                    _metric_status_by_threshold(abs(roll), pass_max=8, warn_max=18),
+                )
+            )
+
+    rows.append(_category_row("Accessories"))
+    rows.append(
+        _metric_row(
+            "Glasses",
+            _format_bool_text(metrics.get("glasses"), "Detected", "Not detected"),
+            "Accessories",
+            "info",
+        )
+    )
+
+    rows.append(_category_row("Image Info"))
+    rows.extend(
+        [
+            _metric_row(
+                "Resolution",
+                f"{metrics.get('image_width', 'Unavailable')} x {metrics.get('image_height', 'Unavailable')}",
+                "Image Info",
+                "info",
+            ),
+            _metric_row(
+                "File Size",
+                _format_file_size(metrics.get("file_size_bytes")),
+                "Image Info",
+                "info",
+            ),
+            _metric_row(
+                "Format / Mode",
+                f"{metrics.get('image_format', 'Unknown')} / {metrics.get('image_mode', 'Unknown')}",
+                "Image Info",
+                "info",
+            ),
+        ]
+    )
+    return rows
 
 
-def _selected_fingerprint_metrics(metrics: dict[str, Any]) -> dict[str, str]:
-    keys = [
-        "NFIQ2",
-        "image_width",
-        "image_height",
-        "uniform_image",
-        "empty_image_or_contrast_too_low",
-    ]
-    return {
-        key.replace("_", " ").title(): str(metrics[key])
-        for key in keys
-        if metrics.get(key) not in (None, "")
-    }
+def _selected_fingerprint_metrics(metrics: dict[str, Any]) -> list[dict[str, str]]:
+    rows = [_category_row("Fingerprint Quality")]
+    if metrics.get("NFIQ2") not in (None, ""):
+        rows.append(
+            _metric_row(
+                "NFIQ2",
+                _format_decimal(metrics.get("NFIQ2")),
+                "Fingerprint Quality",
+                _metric_status_by_threshold(metrics.get("NFIQ2"), pass_min=75, warn_min=50),
+            )
+        )
+    if metrics.get("quality") not in (None, ""):
+        rows.append(
+            _metric_row(
+                "Quality",
+                _format_decimal(metrics.get("quality")),
+                "Fingerprint Quality",
+                _metric_status_by_threshold(metrics.get("quality"), pass_min=75, warn_min=50),
+            )
+        )
+    rows.append(_category_row("Image Info"))
+    rows.extend(
+        [
+            _metric_row(
+                "Resolution",
+                f"{metrics.get('image_width', 'Unavailable')} x {metrics.get('image_height', 'Unavailable')}",
+                "Image Info",
+                "info",
+            ),
+            _metric_row(
+                "Uniform Image",
+                _format_bool_text(metrics.get("uniform_image")),
+                "Image Info",
+                "info",
+            ),
+            _metric_row(
+                "Low Contrast",
+                _format_bool_text(metrics.get("empty_image_or_contrast_too_low"), "Yes", "No"),
+                "Image Info",
+                "warn" if _format_bool_text(metrics.get("empty_image_or_contrast_too_low"), "Yes", "No") == "Yes" else "pass",
+            ),
+        ]
+    )
+    return rows
 
 
 def _issues_from_metrics(modality: str, metrics: dict[str, Any]) -> list[str]:
     issues: list[str] = []
     if modality == "face":
+        face_detection = _coerce_float(metrics.get("face_detection"))
+        if face_detection is None or face_detection <= 0:
+            issues.append("No face was detected in the image, so landmark-based metrics are unavailable.")
         brightness = _coerce_float(metrics.get("brightness"))
         sharpness = _coerce_float(metrics.get("sharpness"))
         face_ratio = _coerce_float(metrics.get("face_ratio"))
@@ -619,16 +950,42 @@ def _issues_from_metrics(modality: str, metrics: dict[str, Any]) -> list[str]:
     return issues
 
 
-def _parse_openbq_csv(temp_dir: Path) -> dict[str, Any]:
+def _parse_openbq_csv(temp_dir: Path, source_path: Path) -> dict[str, Any]:
     csv_files = sorted(temp_dir.rglob("*.csv"))
     if not csv_files:
         raise FileNotFoundError("OpenBQ did not generate a CSV result.")
+    source_name = source_path.name.lower()
     with csv_files[0].open("r", encoding="utf-8-sig", newline="") as handle:
         reader = csv.DictReader(handle)
-        first_row = next(reader, None)
-    if first_row is None:
+        rows = [dict(row) for row in reader]
+    if not rows:
         raise ValueError("OpenBQ output CSV was empty.")
-    return dict(first_row)
+    for row in rows:
+        if _normalize_openbq_file_ref(row.get("file")) == source_name:
+            return row
+    return rows[0]
+
+
+def _parse_openbq_log(temp_dir: Path, source_path: Path) -> list[str]:
+    log_files = sorted(temp_dir.rglob("*.json"))
+    if not log_files:
+        return []
+    source_name = source_path.name.lower()
+    diagnostics: list[str] = []
+    for log_file in log_files:
+        try:
+            payload = json.loads(log_file.read_text(encoding="utf-8-sig"))
+        except json.JSONDecodeError:
+            continue
+        for entry in payload.get("log", []):
+            if _normalize_openbq_file_ref(entry.get("file")) != source_name:
+                continue
+            for key, value in entry.items():
+                if key == "file":
+                    continue
+                diagnostics.append(f"{key}: {value}")
+    # Keep order, drop duplicates.
+    return list(dict.fromkeys(diagnostics))
 
 
 def run_openbq_analysis(
@@ -637,6 +994,7 @@ def run_openbq_analysis(
     saved_preview_filename: str,
 ) -> BiometricValidationResult:
     issues, metadata = prevalidate_biometric_file(request, source_path)
+    log_issues: list[str] = []
     if issues and (
         "accepts:" in issues[0]
         or "empty or unreadable" in issues[0]
@@ -648,8 +1006,9 @@ def run_openbq_analysis(
             overall_score=0.0,
             status="Rejected",
             issue_list=issues,
-            metrics=metadata,
+            metrics=[],
             preview_filename=saved_preview_filename,
+            face_detected=False,
             raw_output={},
         )
 
@@ -664,8 +1023,9 @@ def run_openbq_analysis(
             overall_score=0.0,
             status="Rejected",
             issue_list=issues,
-            metrics=metadata,
+            metrics=[],
             preview_filename=saved_preview_filename,
+            face_detected=False,
             raw_output={},
         )
 
@@ -693,8 +1053,9 @@ def run_openbq_analysis(
                 overall_score=0.0,
                 status="Rejected",
                 issue_list=issues,
-                metrics=metadata,
+                metrics=[],
                 preview_filename=saved_preview_filename,
+                face_detected=False,
                 raw_output={},
             )
 
@@ -711,13 +1072,15 @@ def run_openbq_analysis(
                 overall_score=0.0,
                 status="Rejected",
                 issue_list=issues,
-                metrics=metadata,
+                metrics=[],
                 preview_filename=saved_preview_filename,
+                face_detected=False,
                 raw_output=raw_output,
             )
 
         try:
-            metrics = {**metadata, **_parse_openbq_csv(temp_dir)}
+            metrics = {**metadata, **_parse_openbq_csv(temp_dir, source_path)}
+            log_issues = _parse_openbq_log(temp_dir, source_path)
         except (FileNotFoundError, ValueError) as error:
             issues.append(str(error))
             return BiometricValidationResult(
@@ -726,8 +1089,9 @@ def run_openbq_analysis(
                 overall_score=0.0,
                 status="Rejected",
                 issue_list=issues,
-                metrics=metadata,
+                metrics=[],
                 preview_filename=saved_preview_filename,
+                face_detected=False,
                 raw_output=raw_output,
             )
 
@@ -737,18 +1101,24 @@ def run_openbq_analysis(
         else _extract_fingerprint_score(metrics)
     )
     issues.extend(_issues_from_metrics(request.modality, metrics))
+    issues.extend(log_issues)
     selected_metrics = (
         _selected_face_metrics(metrics)
         if request.modality == "face"
         else _selected_fingerprint_metrics(metrics)
     )
+    face_detected = False
+    if request.modality == "face":
+        detection = _coerce_float(metrics.get("face_detection"))
+        face_detected = detection is not None and detection > 0
     return BiometricValidationResult(
         modality=request.modality,
         source_filename=request.source_filename,
         overall_score=round(score, 2),
         status=_status_from_score(score),
-        issue_list=issues or ["No operator issues detected."],
+        issue_list=list(dict.fromkeys(issues)) or ["No operator issues detected."],
         metrics=selected_metrics,
         preview_filename=saved_preview_filename,
-        raw_output=metrics,
+        face_detected=face_detected,
+        raw_output={"csv_metrics": metrics, "log_issues": log_issues},
     )
