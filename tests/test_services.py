@@ -9,6 +9,9 @@ from PIL import Image
 
 from Validex.models import ManualDemographicInput
 from Validex.services import (
+    _parse_openbq_csv,
+    _parse_openbq_log,
+    _selected_face_metrics,
     apply_duplicate_match,
     map_csv_headers,
     normalized_similarity,
@@ -110,6 +113,74 @@ class ValidationServiceTests(unittest.TestCase):
             "Fingerprint DPI metadata is unavailable; OpenBQ results may require review.",
             issues,
         )
+
+    def test_openbq_csv_parser_selects_matching_file_row(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            csv_path = temp_path / "output_face.csv"
+            csv_path.write_text(
+                "file,image_height,image_width,face_detection,brightness,sharpness,contrast,dynamic_range,file_size_bytes,image_format,image_mode,face_ratio\n"
+                ".\\uploaded_files\\other.png,512,512,0.12,140,50,60,70,1000,PNG,RGBA,\n"
+                ".\\uploaded_files\\target.png,512,512,0.82,174.36,236.05,92.05,115.17,139152,PNG,RGBA,0.02854\n",
+                encoding="utf-8",
+            )
+
+            selected = _parse_openbq_csv(temp_path, Path("target.png"))
+
+        self.assertEqual(selected["file"], ".\\uploaded_files\\target.png")
+        self.assertEqual(selected["face_detection"], "0.82")
+
+    def test_openbq_log_parser_filters_to_matching_file(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            log_path = temp_path / "log_face.json"
+            log_path.write_text(
+                '{"log": ['
+                '{"face detection": "no face found", "file": "uploaded_files/other.png"},'
+                '{"face mesh": "failed to extract face mesh", "file": "uploaded_files/target.png"},'
+                '{"Head pose estimation": "missing landmarks", "file": "uploaded_files/target.png"}'
+                ']}',
+                encoding="utf-8",
+            )
+
+            diagnostics = _parse_openbq_log(temp_path, Path("target.png"))
+
+        self.assertEqual(
+            diagnostics,
+            [
+                "face mesh: failed to extract face mesh",
+                "Head pose estimation: missing landmarks",
+            ],
+        )
+
+    def test_selected_face_metrics_include_categories_and_status(self) -> None:
+        metrics = _selected_face_metrics(
+            {
+                "image_height": "512",
+                "image_width": "512",
+                "face_detection": "0.82",
+                "smile": "0",
+                "brightness": "174.36",
+                "dynamic_range": "115.17",
+                "sharpness": "236.05",
+                "contrast": "92.05",
+                "file_size_bytes": "139152",
+                "image_format": "PNG",
+                "image_mode": "RGBA",
+                "face_ratio": "0.02854",
+                "glasses": "0",
+            }
+        )
+
+        labels = {row["label"] for row in metrics if row["row_type"] == "metric"}
+        categories = {row["category"] for row in metrics}
+
+        self.assertIn("Brightness", labels)
+        self.assertIn("Detection Confidence", labels)
+        self.assertIn("Resolution", labels)
+        self.assertIn("Image Quality", categories)
+        self.assertIn("Face Detection", categories)
+        self.assertTrue(all("status" in row for row in metrics))
 
 
 if __name__ == "__main__":
