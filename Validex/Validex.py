@@ -94,10 +94,12 @@ class AppState(rx.State):
     biometric_preview_filename: str = ""
     biometric_preview_is_image: bool = False
     biometric_preview_history: list[str] = []
-    biometric_metric_rows: list[dict[str, str]] = []
+    biometric_metric_rows: list[dict[str, Any]] = []
     biometric_issues: list[str] = []
     has_biometric_result: bool = False
     has_manual_duplicate: bool = False
+    biometric_face_detected: bool = False
+    biometric_image_filename: str = ""
 
     @rx.var
     def biometric_ring_bg(self) -> str:
@@ -118,9 +120,23 @@ class AppState(rx.State):
     @rx.var
     def biometric_status_message(self) -> str:
         if not self.has_biometric_result: return "Awaiting sample upload"
+        if self.biometric_modality == "face" and not self.biometric_face_detected:
+            return "No face detected; image-quality metrics only"
         if self.biometric_status == "Accepted": return "Optimal Quality Threshold Met"
         if self.biometric_status == "Failed": return "Analysis Failed"
         return "Quality Threshold Not Met"
+
+    @rx.var
+    def biometric_face_badge_text(self) -> str:
+        if self.biometric_modality != "face" or not self.has_biometric_result:
+            return ""
+        return "FACE DETECTED" if self.biometric_face_detected else "NO FACE DETECTED"
+
+    @rx.var
+    def biometric_face_badge_color(self) -> str:
+        if self.biometric_modality != "face" or not self.has_biometric_result:
+            return "gray"
+        return "grass" if self.biometric_face_detected else "tomato"
 
     @rx.var
     def batch_total_pages(self) -> int:
@@ -219,6 +235,8 @@ class AppState(rx.State):
         self.biometric_metric_rows = []
         self.biometric_issues = []
         self.has_biometric_result = False
+        self.biometric_face_detected = False
+        self.biometric_image_filename = ""
         return rx.redirect("/")
 
     def set_biometric_mode(self, mode: str):
@@ -233,6 +251,8 @@ class AppState(rx.State):
         self.biometric_metric_rows = []
         self.biometric_issues = []
         self.has_biometric_result = False
+        self.biometric_face_detected = False
+        self.biometric_image_filename = ""
         return rx.clear_selected_files(BIOMETRIC_UPLOAD_ID)
 
     def previous_batch_page(self) -> None:
@@ -349,13 +369,13 @@ class AppState(rx.State):
                 self.biometric_score = result.overall_score
                 self.biometric_status = result.status
                 self.biometric_source_filename = result.source_filename
+                self.biometric_image_filename = result.source_filename
                 self.biometric_preview_filename = result.preview_filename
                 self.biometric_preview_is_image = result.preview_filename.lower().endswith(
                     (".jpg", ".jpeg", ".png", ".bmp")
                 )
-                self.biometric_metric_rows = [
-                    {"label": key, "value": value} for key, value in result.metrics.items()
-                ]
+                self.biometric_face_detected = result.face_detected
+                self.biometric_metric_rows = result.metrics
                 self.biometric_issues = result.issue_list
                 self.has_biometric_result = True
                 
@@ -369,7 +389,11 @@ class AppState(rx.State):
                 self.has_biometric_result = True
                 self.biometric_score = 0
                 self.biometric_status = "Failed"
-                self.biometric_metric_rows = [{"label": "Analysis", "value": "Service Offline"}]
+                self.biometric_image_filename = filename
+                self.biometric_face_detected = False
+                self.biometric_metric_rows = [
+                    {"label": "Runtime Status", "value": "Service Offline", "category": "Diagnostics", "status": "fail", "row_type": "metric"}
+                ]
                 self.biometric_issues = ["Could not connect to OpenBQ validation cluster."]
                 if saved_name.lower().endswith((".jpg", ".jpeg", ".png", ".bmp")):
                     self.biometric_preview_history.insert(0, saved_name)
@@ -622,13 +646,80 @@ def batch_row(row: dict[str, Any]) -> rx.Component:
     )
 
 
-def metric_row(row: dict[str, str]) -> rx.Component:
+def biometric_metric_status_chip(status: str | rx.Var) -> rx.Component:
+    icon_name = rx.cond(
+        status == "pass",
+        "circle-check-big",
+        rx.cond(
+            status == "warn",
+            "triangle-alert",
+            rx.cond(status == "fail", "circle-x", "info"),
+        ),
+    )
+    icon_color = rx.cond(
+        status == "pass",
+        SUCCESS,
+        rx.cond(
+            status == "warn",
+            WARNING,
+            rx.cond(status == "fail", FAILURE, MUTED),
+        ),
+    )
     return rx.hstack(
-        rx.icon("check-circle", size=14, color=PRIMARY),
-        rx.text(row["label"], font_size="0.85rem", font_weight="600", color=PRIMARY),
-        rx.spacer(),
-        rx.text(row["value"], font_size="0.85rem", font_weight="800", color=PRIMARY),
-        width="100%", align="center", padding_y="0.8rem",
+        rx.icon(icon_name, size=14, color=icon_color),
+        rx.text(
+            rx.cond(
+                status == "pass",
+                "PASS",
+                rx.cond(
+                    status == "warn",
+                    "WARN",
+                    rx.cond(status == "fail", "FAIL", "INFO"),
+                ),
+            ),
+            color=icon_color,
+            font_size="0.72rem",
+            font_weight="800",
+            letter_spacing="0.08em",
+        ),
+        spacing="1",
+        align="center",
+    )
+
+
+def metric_row(row: dict[str, Any]) -> rx.Component:
+    return rx.cond(
+        row["row_type"] == "section",
+        rx.box(
+            rx.text(
+                row["label"],
+                font_size="0.78rem",
+                font_weight="800",
+                color=MUTED,
+                letter_spacing="0.12em",
+                text_transform="uppercase",
+            ),
+            width="100%",
+            padding_top="1.1rem",
+            padding_bottom="0.45rem",
+            border_bottom="1px solid rgba(15, 23, 42, 0.08)",
+        ),
+        rx.hstack(
+            rx.vstack(
+                rx.text(row["label"], font_size="0.88rem", font_weight="600", color=PRIMARY),
+                rx.text(row["category"], font_size="0.72rem", color=MUTED),
+                spacing="0",
+                align="start",
+            ),
+            rx.spacer(),
+            biometric_metric_status_chip(row["status"]),
+            rx.text(row["value"], font_size="0.88rem", font_weight="800", color=PRIMARY, text_align="right"),
+            width="100%",
+            align="center",
+            padding_y="0.8rem",
+            border_bottom="1px solid rgba(15, 23, 42, 0.05)",
+            spacing="4",
+        ),
     )
 
 
@@ -1435,6 +1526,29 @@ def biometrics_page() -> rx.Component:
                 align="center",
             ),
             rx.heading("Analysis Report", size="7", color=PRIMARY, font_weight="800"),
+            rx.cond(
+                AppState.biometric_image_filename != "",
+                rx.text(
+                    AppState.biometric_image_filename,
+                    color=MUTED,
+                    font_size="0.85rem",
+                    font_weight="600",
+                ),
+                rx.fragment(),
+            ),
+            rx.cond(
+                (AppState.biometric_modality == "face") & AppState.has_biometric_result,
+                rx.badge(
+                    AppState.biometric_face_badge_text,
+                    color_scheme=AppState.biometric_face_badge_color,
+                    variant="surface",
+                    padding_x="0.95rem",
+                    padding_y="0.4rem",
+                    font_weight="800",
+                    border_radius="full",
+                ),
+                rx.fragment(),
+            ),
             rx.center(
                 rx.center(
                     rx.center(
@@ -1490,6 +1604,22 @@ def biometrics_page() -> rx.Component:
                             margin_y="1rem",
                         ),
                         rx.fragment()
+                    ),
+                    rx.vstack(
+                        rx.foreach(
+                            AppState.biometric_issues,
+                            lambda issue: rx.callout(
+                                issue,
+                                color_scheme=rx.cond(
+                                    AppState.biometric_face_detected,
+                                    "amber",
+                                    "tomato",
+                                ),
+                                width="100%",
+                            ),
+                        ),
+                        width="100%",
+                        spacing="2",
                     ),
                     width="100%",
                 ),
