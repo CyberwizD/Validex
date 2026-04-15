@@ -155,6 +155,8 @@ class AppState(rx.State):
     biometric_modality: str = "face"
     biometric_error: str = ""
     biometric_reports: list[dict[str, Any]] = []
+    biometric_is_analyzing: bool = False
+    biometric_activity_message: str = ""
     has_manual_duplicate: bool = False
     biometric_detail_open: bool = False
     biometric_detail_filename: str = ""
@@ -310,6 +312,8 @@ class AppState(rx.State):
     def reset_biometric_state(self) -> None:
         self.biometric_error = ""
         self.biometric_reports = []
+        self.biometric_is_analyzing = False
+        self.biometric_activity_message = ""
         self.biometric_detail_open = False
         self.biometric_detail_filename = ""
         self.biometric_detail_preview_filename = ""
@@ -471,6 +475,10 @@ class AppState(rx.State):
             self.biometric_error = "Select a biometric sample before analysis."
             return
 
+        self.biometric_is_analyzing = True
+        self.biometric_activity_message = f"OpenBQ analysis started for {len(files)} sample(s). This may take a moment."
+        yield
+
         report_rows: list[dict[str, Any]] = []
         for file in files:
             filename = file.filename or "sample"
@@ -542,7 +550,10 @@ class AppState(rx.State):
                 )
 
         self.biometric_reports = report_rows
-        return rx.clear_selected_files(BIOMETRIC_UPLOAD_ID)
+        self.biometric_is_analyzing = False
+        if report_rows:
+            self.biometric_activity_message = f"Completed analysis for {len(report_rows)} sample(s). Click a row to inspect full details."
+        yield rx.clear_selected_files(BIOMETRIC_UPLOAD_ID)
 
 
 def nav_link(label: str, href: str, active: str) -> rx.Component:
@@ -1557,9 +1568,66 @@ def biometric_upload_card() -> rx.Component:
                 margin_top="1.5rem",
             ),
             rx.cond(
+                AppState.biometric_is_analyzing,
+                rx.hstack(
+                    rx.box(
+                        width="10px",
+                        height="10px",
+                        border_radius="999px",
+                        background=ACCENT,
+                        box_shadow="0 0 0 6px rgba(253,186,77,0.18)",
+                    ),
+                    rx.vstack(
+                        rx.text(
+                            "Analysis in progress",
+                            color=PRIMARY,
+                            font_weight="800",
+                            font_size="0.9rem",
+                        ),
+                        rx.text(
+                            AppState.biometric_activity_message,
+                            color=MUTED,
+                            font_size="0.82rem",
+                        ),
+                        spacing="1",
+                        align="start",
+                    ),
+                    width="100%",
+                    align="start",
+                    spacing="3",
+                    background="#FFF9ED",
+                    border="1px solid rgba(253,186,77,0.42)",
+                    border_radius="16px",
+                    padding="0.95rem 1rem",
+                    margin_top="1rem",
+                ),
+                rx.fragment(),
+            ),
+            rx.cond(
                 rx.selected_files(BIOMETRIC_UPLOAD_ID).length() > 0,
                 rx.button(
-                    "Analyze Samples",
+                    rx.hstack(
+                        rx.cond(
+                            AppState.biometric_is_analyzing,
+                            rx.box(
+                                width="14px",
+                                height="14px",
+                                border_radius="999px",
+                                border="2px solid rgba(255,255,255,0.45)",
+                                border_top="2px solid white",
+                            ),
+                            rx.fragment(),
+                        ),
+                        rx.text(
+                            rx.cond(
+                                AppState.biometric_is_analyzing,
+                                "Analyzing Samples...",
+                                "Analyze Samples",
+                            )
+                        ),
+                        spacing="3",
+                        align="center",
+                    ),
                     on_click=AppState.handle_biometric_upload(rx.upload_files(upload_id=BIOMETRIC_UPLOAD_ID)),
                     background=PRIMARY,
                     color="white",
@@ -1568,8 +1636,25 @@ def biometric_upload_card() -> rx.Component:
                     border_radius="12px",
                     font_weight="800",
                     margin_top="1rem",
+                    disabled=AppState.biometric_is_analyzing,
+                    opacity=rx.cond(AppState.biometric_is_analyzing, "0.88", "1"),
+                    cursor=rx.cond(AppState.biometric_is_analyzing, "wait", "pointer"),
                 ),
                 rx.fragment(),
+            ),
+            rx.cond(
+                AppState.biometric_is_analyzing,
+                rx.fragment(),
+                rx.cond(
+                    AppState.biometric_activity_message != "",
+                    rx.text(
+                        AppState.biometric_activity_message,
+                        color=MUTED,
+                        font_size="0.8rem",
+                        line_height="1.5",
+                    ),
+                    rx.fragment(),
+                ),
             ),
             rx.cond(
                 AppState.biometric_error != "",
@@ -1961,29 +2046,62 @@ def biometric_detail_modal() -> rx.Component:
 
 def biometric_report_empty_state() -> rx.Component:
     return rx.center(
-        rx.vstack(
-            rx.center(
-                rx.icon("file-search", size=26, color=PRIMARY),
-                width="58px",
-                height="58px",
-                border_radius="18px",
-                background="#EEF2FF",
+        rx.cond(
+            AppState.biometric_is_analyzing,
+            rx.vstack(
+                rx.center(
+                    rx.box(
+                        width="20px",
+                        height="20px",
+                        border_radius="999px",
+                        border="3px solid rgba(20,28,50,0.16)",
+                        border_top="3px solid #141C32",
+                    ),
+                    width="58px",
+                    height="58px",
+                    border_radius="18px",
+                    background="#EEF2FF",
+                ),
+                rx.heading(
+                    "Analysis Running",
+                    size="5",
+                    color=PRIMARY,
+                    font_weight="800",
+                ),
+                rx.text(
+                    AppState.biometric_activity_message,
+                    color=MUTED,
+                    text_align="center",
+                    max_width="340px",
+                    line_height="1.6",
+                ),
+                spacing="3",
+                align="center",
             ),
-            rx.heading(
-                "No Reports Yet",
-                size="5",
-                color=PRIMARY,
-                font_weight="800",
+            rx.vstack(
+                rx.center(
+                    rx.icon("file-search", size=26, color=PRIMARY),
+                    width="58px",
+                    height="58px",
+                    border_radius="18px",
+                    background="#EEF2FF",
+                ),
+                rx.heading(
+                    "No Reports Yet",
+                    size="5",
+                    color=PRIMARY,
+                    font_weight="800",
+                ),
+                rx.text(
+                    "Upload biometric files and run analysis to populate this report.",
+                    color=MUTED,
+                    text_align="center",
+                    max_width="320px",
+                    line_height="1.6",
+                ),
+                spacing="3",
+                align="center",
             ),
-            rx.text(
-                "Upload biometric files and run analysis to populate this report.",
-                color=MUTED,
-                text_align="center",
-                max_width="320px",
-                line_height="1.6",
-            ),
-            spacing="3",
-            align="center",
         ),
         width="100%",
         min_height="380px",
