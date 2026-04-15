@@ -842,6 +842,54 @@ def biometric_metric_status_chip(status: str | rx.Var) -> rx.Component:
     )
 
 
+def biometric_table_status_badge(status: str | rx.Var) -> rx.Component:
+    label = rx.cond(
+        status == "Pass",
+        "PASS",
+        rx.cond(status == "Warning", "WARNING", "FAIL"),
+    )
+    color = rx.cond(
+        status == "Pass",
+        SUCCESS,
+        rx.cond(status == "Warning", WARNING, FAILURE),
+    )
+    background = rx.cond(
+        status == "Pass",
+        "rgba(34,197,94,0.12)",
+        rx.cond(status == "Warning", "rgba(245,158,11,0.14)", "rgba(239,68,68,0.12)"),
+    )
+    return rx.hstack(
+        rx.box(
+            width="8px",
+            height="8px",
+            border_radius="999px",
+            background=color,
+            box_shadow=rx.cond(
+                status == "Pass",
+                "0 0 0 3px rgba(34,197,94,0.10)",
+                rx.cond(
+                    status == "Warning",
+                    "0 0 0 3px rgba(245,158,11,0.10)",
+                    "0 0 0 3px rgba(239,68,68,0.10)",
+                ),
+            ),
+        ),
+        rx.text(
+            label,
+            color=color,
+            font_size="0.72rem",
+            font_weight="800",
+            letter_spacing="0.05em",
+        ),
+        spacing="2",
+        align="center",
+        background=background,
+        border_radius="999px",
+        padding_x="0.7rem",
+        padding_y="0.28rem",
+    )
+
+
 def metric_row(row: dict[str, Any]) -> rx.Component:
     return rx.cond(
         row["row_type"] == "section",
@@ -1787,40 +1835,69 @@ def biometric_report_row(report: dict[str, Any]) -> rx.Component:
                 cursor="pointer",
                 _hover={"background": "transparent", "color": "#0F172A"},
             ),
-            max_width="210px",
+            max_width="215px",
+            padding_y="1rem",
         ),
         rx.table.cell(
             rx.hstack(
                 rx.box(
-                    width="10px",
-                    height="10px",
+                    width="22px",
+                    height="22px",
                     border_radius="999px",
-                    background=rx.cond(
+                    border=rx.cond(
                         report["row_status"] == "Pass",
-                        SUCCESS,
-                        rx.cond(report["row_status"] == "Warning", WARNING, FAILURE),
+                        "3px solid #22C55E",
+                        rx.cond(
+                            report["row_status"] == "Warning",
+                            "3px solid #F59E0B",
+                            "3px solid #EF4444",
+                        ),
+                    ),
+                    border_right=rx.cond(
+                        report["row_status"] == "Pass",
+                        "3px solid rgba(34,197,94,0.18)",
+                        rx.cond(
+                            report["row_status"] == "Warning",
+                            "3px solid rgba(245,158,11,0.18)",
+                            "3px solid rgba(239,68,68,0.18)",
+                        ),
+                    ),
+                    border_top=rx.cond(
+                        report["row_status"] == "Pass",
+                        "3px solid rgba(34,197,94,0.28)",
+                        rx.cond(
+                            report["row_status"] == "Warning",
+                            "3px solid rgba(245,158,11,0.28)",
+                            "3px solid rgba(239,68,68,0.28)",
+                        ),
                     ),
                 ),
-                rx.text(report["score_text"], color=PRIMARY, font_weight="800"),
-                spacing="2",
+                rx.text(report["score_text"], color=PRIMARY, font_weight="800", font_size="1rem"),
+                spacing="3",
                 align="center",
-            )
+            ),
+            padding_y="1rem",
         ),
-        rx.table.cell(status_badge(report["row_status"])),
+        rx.table.cell(
+            biometric_table_status_badge(report["row_status"]),
+            padding_y="1rem",
+        ),
         rx.table.cell(
             rx.text(
                 report["details"],
                 color=PRIMARY,
                 font_size="0.88rem",
+                font_weight="600",
                 max_width="260px",
                 overflow="hidden",
                 text_overflow="ellipsis",
                 white_space="nowrap",
-            )
+            ),
+            padding_y="1rem",
         ),
         on_click=AppState.open_biometric_detail(report["report_id"]),
         cursor="pointer",
-        _hover={"background": "#F8FAFC"},
+        _hover={"background": "#FBFCFE"},
         border_bottom="1px solid rgba(15,23,42,0.06)",
     )
 
@@ -2095,7 +2172,50 @@ def biometric_report_empty_state() -> rx.Component:
 
 
 def biometric_report_header_row() -> rx.Component:
-    return table_header(["File Name", "OpenBQ Score", "Status", "Details"])
+    return rx.table.header(
+        rx.table.row(
+            rx.table.column_header_cell(
+                "File Name",
+                color=PRIMARY,
+                font_size="0.76rem",
+                font_weight="800",
+                letter_spacing="0.02em",
+                background="#F8FAFC",
+                border_bottom="1px solid rgba(15,23,42,0.06)",
+                padding_y="0.9rem",
+            ),
+            rx.table.column_header_cell(
+                "Score",
+                color=PRIMARY,
+                font_size="0.76rem",
+                font_weight="800",
+                letter_spacing="0.02em",
+                background="#F8FAFC",
+                border_bottom="1px solid rgba(15,23,42,0.06)",
+                padding_y="0.9rem",
+            ),
+            rx.table.column_header_cell(
+                "Status",
+                color=PRIMARY,
+                font_size="0.76rem",
+                font_weight="800",
+                letter_spacing="0.02em",
+                background="#F8FAFC",
+                border_bottom="1px solid rgba(15,23,42,0.06)",
+                padding_y="0.9rem",
+            ),
+            rx.table.column_header_cell(
+                "Details/Issues",
+                color=PRIMARY,
+                font_size="0.76rem",
+                font_weight="800",
+                letter_spacing="0.02em",
+                background="#F8FAFC",
+                border_bottom="1px solid rgba(15,23,42,0.06)",
+                padding_y="0.9rem",
+            ),
+        ),
+    )
 
 
 def biometrics_page() -> rx.Component:
