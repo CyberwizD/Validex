@@ -2214,7 +2214,9 @@ def biometrics_page() -> rx.Component:
         border_left="5px solid #10B981",
         border_top_left_radius="6px",
         border_bottom_left_radius="6px",
-        min_height="100%",
+        min_height="auto",
+        height="fit-content",
+        align_self="start",
     )
 
     content = rx.vstack(
@@ -2262,12 +2264,14 @@ def biometrics_page() -> rx.Component:
                 biometric_preview_panel(),
                 spacing="4",
                 width="100%",
+                align_self="start",
             ),
             result_panel,
             grid_template_columns=["1fr", "1fr", "3fr 2fr"],
             spacing="5",
             width="100%",
             align_items="start",
+            grid_auto_rows="max-content",
         ),
         biometric_detail_modal(),
         spacing="5",
