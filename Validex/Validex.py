@@ -2185,10 +2185,10 @@ def biometric_report_header_row() -> rx.Component:
                 padding_y="0.9rem",
             ),
             rx.table.column_header_cell(
-                "Score",
+                "OpenBQ Score",
                 color=PRIMARY,
-                font_size="0.76rem",
-                font_weight="800",
+                font_size="0.66rem",
+                font_weight="1000",
                 letter_spacing="0.02em",
                 background="#F8FAFC",
                 border_bottom="1px solid rgba(15,23,42,0.06)",
