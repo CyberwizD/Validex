@@ -2065,6 +2065,7 @@ def biometric_detail_modal() -> rx.Component:
         padding="1.5rem",
         box_shadow="none",
         border="1px solid rgba(15, 23, 42, 0.08)",
+        border_radius="1px solid rgba(15, 23, 42, 0.08)"
     )
 
     return rx.dialog.root(
