@@ -1773,33 +1773,23 @@ def biometric_preview_panel() -> rx.Component:
 
 
 def biometric_report_row(report: dict[str, Any]) -> rx.Component:
-    return rx.box(
-        rx.grid(
-            rx.vstack(
-                rx.text(
-                    report["filename"],
-                    color=PRIMARY,
-                    font_size="0.94rem",
-                    font_weight="700",
-                    line_height="1.35",
-                    overflow="hidden",
-                    text_overflow="ellipsis",
-                    white_space="nowrap",
-                    max_width="100%",
-                ),
-                rx.text(
-                    rx.cond(
-                        report["modality"] == "face",
-                        "Face validation sample",
-                        "Fingerprint validation sample",
-                    ),
-                    color=MUTED,
-                    font_size="0.74rem",
-                ),
-                spacing="1",
-                align="start",
-                min_width="0",
+    return rx.table.row(
+        rx.table.cell(
+            rx.button(
+                report["filename"],
+                on_click=AppState.open_biometric_detail(report["report_id"]),
+                variant="ghost",
+                color=PRIMARY,
+                font_weight="700",
+                justify="start",
+                padding="0",
+                height="auto",
+                cursor="pointer",
+                _hover={"background": "transparent", "color": "#0F172A"},
             ),
+            max_width="210px",
+        ),
+        rx.table.cell(
             rx.hstack(
                 rx.box(
                     width="10px",
@@ -1810,68 +1800,28 @@ def biometric_report_row(report: dict[str, Any]) -> rx.Component:
                         SUCCESS,
                         rx.cond(report["row_status"] == "Warning", WARNING, FAILURE),
                     ),
-                    box_shadow=rx.cond(
-                        report["row_status"] == "Pass",
-                        "0 0 0 4px rgba(21,127,59,0.10)",
-                        rx.cond(
-                            report["row_status"] == "Warning",
-                            "0 0 0 4px rgba(217,119,6,0.10)",
-                            "0 0 0 4px rgba(180,35,24,0.10)",
-                        ),
-                    ),
                 ),
-                rx.text(
-                    report["score_text"],
-                    color=PRIMARY,
-                    font_size="1rem",
-                    font_weight="800",
-                ),
-                spacing="3",
+                rx.text(report["score_text"], color=PRIMARY, font_weight="800"),
+                spacing="2",
                 align="center",
-                justify="start",
-            ),
-            status_badge(report["row_status"]),
-            rx.vstack(
-                rx.text(
-                    report["details"],
-                    color=PRIMARY,
-                    font_size="0.88rem",
-                    font_weight="500",
-                    line_height="1.45",
-                    max_width="100%",
-                    overflow="hidden",
-                    text_overflow="ellipsis",
-                    white_space="nowrap",
-                ),
-                rx.text(
-                    "Click row to inspect full metrics and image preview.",
-                    color=MUTED,
-                    font_size="0.74rem",
-                ),
-                spacing="1",
-                align="start",
-                min_width="0",
-            ),
-            columns="4",
-            column_gap="1rem",
-            width="100%",
-            align_items="center",
-            grid_template_columns=["1.45fr", "0.72fr", "0.72fr", "1.7fr"],
+            )
+        ),
+        rx.table.cell(status_badge(report["row_status"])),
+        rx.table.cell(
+            rx.text(
+                report["details"],
+                color=PRIMARY,
+                font_size="0.88rem",
+                max_width="260px",
+                overflow="hidden",
+                text_overflow="ellipsis",
+                white_space="nowrap",
+            )
         ),
         on_click=AppState.open_biometric_detail(report["report_id"]),
         cursor="pointer",
-        width="100%",
-        padding="1rem 1.1rem",
-        border_radius="18px",
-        border="1px solid rgba(15, 23, 42, 0.07)",
-        background="rgba(255,255,255,0.9)",
-        _hover={
-            "background": "#FFFFFF",
-            "border_color": "rgba(20, 28, 50, 0.12)",
-            "box_shadow": "0 12px 24px rgba(15, 23, 42, 0.06)",
-            "transform": "translateY(-1px)",
-        },
-        transition="all 0.18s ease",
+        _hover={"background": "#F8FAFC"},
+        border_bottom="1px solid rgba(15,23,42,0.06)",
     )
 
 
@@ -1907,6 +1857,37 @@ def biometric_detail_modal() -> rx.Component:
         ),
         width="100%",
     )
+
+    def detail_metric_row(row: dict[str, Any]) -> rx.Component:
+        return rx.cond(
+            row["row_type"] == "section",
+            rx.box(
+                rx.text(
+                    row["label"],
+                    color=MUTED,
+                    font_size="0.74rem",
+                    font_weight="800",
+                    letter_spacing="0.08em",
+                    text_transform="uppercase",
+                ),
+                width="100%",
+                padding_top="1rem",
+                padding_bottom="0.55rem",
+                border_bottom="1px solid rgba(15, 23, 42, 0.08)",
+            ),
+            rx.grid(
+                rx.text(row["label"], color=PRIMARY, font_size="0.9rem", font_weight="600"),
+                biometric_metric_status_chip(row["status"]),
+                rx.text(row["value"], color=PRIMARY, font_size="0.88rem", font_weight="700", text_align="right"),
+                columns="3",
+                width="100%",
+                align_items="center",
+                grid_template_columns=["1.45fr", "0.7fr", "0.85fr"],
+                padding_y="0.8rem",
+                border_bottom="1px solid rgba(15, 23, 42, 0.05)",
+                column_gap="1rem",
+            ),
+        )
 
     details_panel = surface_card(
         rx.vstack(
@@ -1973,36 +1954,38 @@ def biometric_detail_modal() -> rx.Component:
                 align="center",
                 spacing="5",
             ),
-            rx.divider(),
-            rx.vstack(
-                rx.foreach(AppState.biometric_detail_metric_rows, metric_row),
-                width="100%",
-                spacing="0",
-                max_height="320px",
-                overflow_y="auto",
-            ),
-            rx.vstack(
-                rx.foreach(
-                    AppState.biometric_detail_issues,
-                    lambda issue: rx.callout(
-                        issue,
-                        color_scheme=rx.cond(
-                            AppState.biometric_detail_face_detected,
-                            "amber",
-                            "tomato",
-                        ),
+            rx.box(
+                rx.vstack(
+                    rx.hstack(
+                        rx.text("Metric", color=MUTED, font_size="0.74rem", font_weight="800", letter_spacing="0.06em", text_transform="uppercase"),
+                        rx.spacer(),
+                        rx.text("Status", color=MUTED, font_size="0.74rem", font_weight="800", letter_spacing="0.06em", text_transform="uppercase"),
+                        rx.text("Value", color=MUTED, font_size="0.74rem", font_weight="800", letter_spacing="0.06em", text_transform="uppercase"),
                         width="100%",
+                        align="center",
                     ),
+                    rx.vstack(
+                        rx.foreach(AppState.biometric_detail_metric_rows, detail_metric_row),
+                        width="100%",
+                        spacing="0",
+                    ),
+                    spacing="0",
+                    width="100%",
                 ),
                 width="100%",
-                spacing="2",
+                background="#FFFFFF",
+                border="1px solid rgba(15, 23, 42, 0.08)",
+                border_radius="18px",
+                padding="1rem",
+                max_height="380px",
+                overflow_y="auto",
             ),
             width="100%",
             spacing="4",
             align="start",
         ),
         width="100%",
-        padding="1.75rem",
+        padding="1.5rem",
         box_shadow="none",
         border="1px solid rgba(15, 23, 42, 0.08)",
     )
@@ -2026,17 +2009,17 @@ def biometric_detail_modal() -> rx.Component:
                     preview_panel,
                     details_panel,
                     columns="2",
-                    spacing="5",
+                    spacing="4",
                     width="100%",
                     align_items="start",
                 ),
                 width="100%",
                 spacing="4",
             ),
-            max_width="1100px",
-            width="92vw",
-            padding="1.5rem",
-            border_radius="26px",
+            max_width="1040px",
+            width="90vw",
+            padding="1.1rem",
+            border_radius="24px",
             background="#FBFBFD",
         ),
         open=AppState.biometric_detail_open,
@@ -2112,19 +2095,7 @@ def biometric_report_empty_state() -> rx.Component:
 
 
 def biometric_report_header_row() -> rx.Component:
-    return rx.grid(
-        rx.text("File Name", color=MUTED, font_size="0.74rem", font_weight="800", letter_spacing="0.06em", text_transform="uppercase"),
-        rx.text("OpenBQ Score", color=MUTED, font_size="0.74rem", font_weight="800", letter_spacing="0.06em", text_transform="uppercase"),
-        rx.text("Status", color=MUTED, font_size="0.74rem", font_weight="800", letter_spacing="0.06em", text_transform="uppercase"),
-        rx.text("Details", color=MUTED, font_size="0.74rem", font_weight="800", letter_spacing="0.06em", text_transform="uppercase"),
-        columns="4",
-        column_gap="1rem",
-        width="100%",
-        align_items="center",
-        grid_template_columns=["1.45fr", "0.72fr", "0.72fr", "1.7fr"],
-        padding_x="1rem",
-        padding_bottom="0.2rem",
-    )
+    return table_header(["File Name", "OpenBQ Score", "Status", "Details"])
 
 
 def biometrics_page() -> rx.Component:
@@ -2181,27 +2152,26 @@ def biometrics_page() -> rx.Component:
                 width="100%",
                 align="start",
             ),
-            rx.box(
-                rx.cond(
-                    AppState.has_biometric_result,
-                    rx.vstack(
+            rx.cond(
+                AppState.has_biometric_result,
+                rx.box(
+                    rx.table.root(
                         biometric_report_header_row(),
-                        rx.vstack(
+                        rx.table.body(
                             rx.foreach(AppState.biometric_reports, biometric_report_row),
-                            spacing="3",
-                            width="100%",
                         ),
-                        spacing="3",
+                        variant="surface",
+                        size="3",
                         width="100%",
                     ),
-                    biometric_report_empty_state(),
+                    width="100%",
+                    background="#FFFFFF",
+                    border="1px solid rgba(15, 23, 42, 0.10)",
+                    border_radius="24px",
+                    padding="0.8rem 0.9rem",
+                    overflow="hidden",
                 ),
-                width="100%",
-                background="linear-gradient(180deg, rgba(248,250,252,0.78) 0%, rgba(255,255,255,0.98) 100%)",
-                border="1px solid rgba(15, 23, 42, 0.10)",
-                border_radius="24px",
-                padding="1.1rem",
-                box_shadow="inset 0 1px 0 rgba(255,255,255,0.9)",
+                biometric_report_empty_state(),
             ),
             rx.hstack(
                 rx.cond(
