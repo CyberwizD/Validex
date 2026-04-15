@@ -1,0 +1,31 @@
+first_name,last_name,dob,gender,email,phone,address
+Mr. John,Doe,1995-05-10,Male,john.doe@gmail.com,08031234567,Lagos
+Dr. Ada,Obi,1990-03-22,Female,ada.obi@gmail.com,08041234567,Abuja
+Prof. Musa,Bello,1985-07-11,Male,musa.bello@gmail.com,08051234567,Kano
+Mrs. Grace,Eze,1992-11-30,Female,grace.eze@gmail.com,08061234567,Port Harcourt
+Mister Tunde,Akin,1988-01-15,Male,tunde.akin@gmail.com,08071234567,Lagos
+Chinedu,Okafor,1993-04-18,Male,chinedu.okafor@gmail.com,12345,Abuja
+Aisha,Mohammed,1996-09-25,Female,aisha.mohammed@gmail.com,08000000000,Lagos
+Emeka,Uche,1991-06-14,Male,emeka.uche@gmail.com,080ABC12345,Port Harcourt
+Fatima,Sadiq,2030-01-01,Female,fatima.sadiq@gmail.com,08081234567,Abuja
+Ibrahim,Lawal,15-08-1990,Male,ibrahim.lawal@gmail.com,08091234567,Lagos
+Ngozi,Nwankwo,1990-02-30,Female,ngozi.nwankwo@gmail.com,08101234567,Port Harcourt
+Sola,Ojo,1994-12-12,Male,sola.ojogmail.com,08111234567,Lagos
+Bisi,Adewale,1993-03-03,Female,bisi.adewale@mailinator.com,08121234567,Abuja
+Yusuf,Garba,1992-06-06,Male,yusuf.garba@gmial.com,08131234567,Kano
+EMMANUEL,OKORO,1990-10-10,Male,emmanuel.okoro@gmail.com,08141234567,Lagos
+BLESSING,JOHNSON,1995-05-05,Female,blessing.johnson@gmail.com,08151234567,Abuja
+DAVID,OGUN,1989-09-09,Male,david.ogun@gmail.com,08161234567,Port Harcourt
+Peter,Adeyemi,1991-02-02,Male,peter.adeyemi@gmail.com,08171234567,Lagos
+Peter,Adeyemi,1991-02-02,Male,peter.adeyemi@gmail.com,08171234567,Lagos
+Chidinma,Okeke,1993-07-07,Female,chidinma.okeke@gmail.com,08181234567,Abuja
+Chidimma,Okeke,1993-07-07,Female,chidimma.okeke@gmail.com,08191234567,Abuja
+,Aliyu,1990-05-05,Male,aliyu@gmail.com,08201234567,Kano
+Zainab,,1992-08-08,Female,zainab@gmail.com,08211234567,Lagos
+Uche,Ibe,1994-04-04,Boy,uche.ibe@gmail.com,08221234567,Port Harcourt
+Hassan,Sule,1993-03-03,1,hassan.sule@gmail.com,08231234567,Abuja
+Mary,Peter,1995-12-12,Mal,mary.peter@gmail.com,08241234567,Lagos
+Kemi,Balogun,1992-02-20,Female,kemi.balogun@gmail.com,08251234567,Lagos
+Sadiq,Abubakar,1991-01-11,Male,sadiq.abubakar@gmail.com,08261234567,Abuja
+Rita,Chukwu,1990-06-16,Female,rita.chukwu@gmail.com,08271234567,Port Harcourt
+Olamide,Salami,1988-08-08,Male,olamide.salami@gmail.com,08281234567,Lagos
