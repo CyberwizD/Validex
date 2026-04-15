@@ -1688,40 +1688,105 @@ def biometric_preview_panel() -> rx.Component:
 
 
 def biometric_report_row(report: dict[str, Any]) -> rx.Component:
-    return rx.table.row(
-        rx.table.cell(
-            rx.button(
-                report["filename"],
-                on_click=AppState.open_biometric_detail(report["report_id"]),
-                variant="ghost",
-                color=PRIMARY,
-                font_weight="700",
-                justify="start",
-                padding="0",
-                height="auto",
-                cursor="pointer",
-                _hover={"background": "transparent", "color": "#0F172A"},
+    return rx.box(
+        rx.grid(
+            rx.vstack(
+                rx.text(
+                    report["filename"],
+                    color=PRIMARY,
+                    font_size="0.94rem",
+                    font_weight="700",
+                    line_height="1.35",
+                    overflow="hidden",
+                    text_overflow="ellipsis",
+                    white_space="nowrap",
+                    max_width="100%",
+                ),
+                rx.text(
+                    rx.cond(
+                        report["modality"] == "face",
+                        "Face validation sample",
+                        "Fingerprint validation sample",
+                    ),
+                    color=MUTED,
+                    font_size="0.74rem",
+                ),
+                spacing="1",
+                align="start",
+                min_width="0",
             ),
-            max_width="220px",
-        ),
-        rx.table.cell(
-            rx.text(report["score_text"], color=PRIMARY, font_weight="700"),
-        ),
-        rx.table.cell(status_badge(report["row_status"])),
-        rx.table.cell(
-            rx.text(
-                report["details"],
-                color=MUTED,
-                font_size="0.88rem",
-                max_width="240px",
-                overflow="hidden",
-                text_overflow="ellipsis",
-                white_space="nowrap",
-            )
+            rx.hstack(
+                rx.box(
+                    width="10px",
+                    height="10px",
+                    border_radius="999px",
+                    background=rx.cond(
+                        report["row_status"] == "Pass",
+                        SUCCESS,
+                        rx.cond(report["row_status"] == "Warning", WARNING, FAILURE),
+                    ),
+                    box_shadow=rx.cond(
+                        report["row_status"] == "Pass",
+                        "0 0 0 4px rgba(21,127,59,0.10)",
+                        rx.cond(
+                            report["row_status"] == "Warning",
+                            "0 0 0 4px rgba(217,119,6,0.10)",
+                            "0 0 0 4px rgba(180,35,24,0.10)",
+                        ),
+                    ),
+                ),
+                rx.text(
+                    report["score_text"],
+                    color=PRIMARY,
+                    font_size="1rem",
+                    font_weight="800",
+                ),
+                spacing="3",
+                align="center",
+                justify="start",
+            ),
+            status_badge(report["row_status"]),
+            rx.vstack(
+                rx.text(
+                    report["details"],
+                    color=PRIMARY,
+                    font_size="0.88rem",
+                    font_weight="500",
+                    line_height="1.45",
+                    max_width="100%",
+                    overflow="hidden",
+                    text_overflow="ellipsis",
+                    white_space="nowrap",
+                ),
+                rx.text(
+                    "Click row to inspect full metrics and image preview.",
+                    color=MUTED,
+                    font_size="0.74rem",
+                ),
+                spacing="1",
+                align="start",
+                min_width="0",
+            ),
+            columns="4",
+            column_gap="1rem",
+            width="100%",
+            align_items="center",
+            grid_template_columns=["1.45fr", "0.72fr", "0.72fr", "1.7fr"],
         ),
         on_click=AppState.open_biometric_detail(report["report_id"]),
         cursor="pointer",
-        _hover={"background": "#F9FAFB"},
+        width="100%",
+        padding="1rem 1.1rem",
+        border_radius="18px",
+        border="1px solid rgba(15, 23, 42, 0.07)",
+        background="rgba(255,255,255,0.9)",
+        _hover={
+            "background": "#FFFFFF",
+            "border_color": "rgba(20, 28, 50, 0.12)",
+            "box_shadow": "0 12px 24px rgba(15, 23, 42, 0.06)",
+            "transform": "translateY(-1px)",
+        },
+        transition="all 0.18s ease",
     )
 
 
@@ -1894,71 +1959,174 @@ def biometric_detail_modal() -> rx.Component:
     )
 
 
+def biometric_report_empty_state() -> rx.Component:
+    return rx.center(
+        rx.vstack(
+            rx.center(
+                rx.icon("file-search", size=26, color=PRIMARY),
+                width="58px",
+                height="58px",
+                border_radius="18px",
+                background="#EEF2FF",
+            ),
+            rx.heading(
+                "No Reports Yet",
+                size="5",
+                color=PRIMARY,
+                font_weight="800",
+            ),
+            rx.text(
+                "Upload biometric files and run analysis to populate this report.",
+                color=MUTED,
+                text_align="center",
+                max_width="320px",
+                line_height="1.6",
+            ),
+            spacing="3",
+            align="center",
+        ),
+        width="100%",
+        min_height="380px",
+        border="1px dashed rgba(20, 28, 50, 0.18)",
+        border_radius="22px",
+        background="linear-gradient(180deg, rgba(247,247,251,0.9) 0%, rgba(255,255,255,0.95) 100%)",
+    )
+
+
+def biometric_report_header_row() -> rx.Component:
+    return rx.grid(
+        rx.text("File Name", color=MUTED, font_size="0.74rem", font_weight="800", letter_spacing="0.06em", text_transform="uppercase"),
+        rx.text("OpenBQ Score", color=MUTED, font_size="0.74rem", font_weight="800", letter_spacing="0.06em", text_transform="uppercase"),
+        rx.text("Status", color=MUTED, font_size="0.74rem", font_weight="800", letter_spacing="0.06em", text_transform="uppercase"),
+        rx.text("Details", color=MUTED, font_size="0.74rem", font_weight="800", letter_spacing="0.06em", text_transform="uppercase"),
+        columns="4",
+        column_gap="1rem",
+        width="100%",
+        align_items="center",
+        grid_template_columns=["1.45fr", "0.72fr", "0.72fr", "1.7fr"],
+        padding_x="1rem",
+        padding_bottom="0.2rem",
+    )
+
+
 def biometrics_page() -> rx.Component:
     result_panel = surface_card(
         rx.vstack(
             rx.hstack(
-                rx.heading("Analysis Report", size="7", color=PRIMARY, font_weight="800"),
-                rx.spacer(),
-                rx.badge(
-                    AppState.biometric_badge_text,
-                    color_scheme=AppState.biometric_badge_color,
-                    variant="surface",
-                    padding_x="0.8rem",
-                    padding_y="0.3rem",
-                    font_weight="800",
-                    border_radius="full",
+                rx.vstack(
+                    rx.hstack(
+                        rx.box(width="8px", height="8px", border_radius="999px", background="#22C55E"),
+                        rx.text(
+                            "Validation Output",
+                            color=MUTED,
+                            font_size="0.75rem",
+                            font_weight="800",
+                            letter_spacing="0.08em",
+                            text_transform="uppercase",
+                        ),
+                        spacing="2",
+                        align="center",
+                    ),
+                    rx.heading("Analysis Report", size="7", color=PRIMARY, font_weight="800"),
+                    spacing="1",
+                    align="start",
                 ),
-                width="100%",
-                align="center",
-            ),
-            rx.table.root(
-                table_header(["File Name", "OpenBQ Score", "Status", "Details/Issues"]),
-                rx.table.body(
+                rx.spacer(),
+                rx.vstack(
+                    rx.badge(
+                        AppState.biometric_badge_text,
+                        color_scheme=AppState.biometric_badge_color,
+                        variant="surface",
+                        padding_x="0.8rem",
+                        padding_y="0.3rem",
+                        font_weight="800",
+                        border_radius="full",
+                    ),
                     rx.cond(
                         AppState.has_biometric_result,
-                        rx.foreach(AppState.biometric_reports, biometric_report_row),
-                        rx.table.row(
-                            rx.table.cell(rx.text("No biometric reports yet.", color=MUTED)),
-                            rx.table.cell(rx.text("-", color=MUTED)),
-                            rx.table.cell(rx.text("-", color=MUTED)),
-                            rx.table.cell(
-                                rx.text(
-                                    "Upload and analyze files to populate this table.",
-                                    color=MUTED,
-                                )
-                            ),
+                        rx.hstack(
+                            rx.text(AppState.biometric_reports.length(), color=MUTED, font_size="0.74rem", font_weight="700"),
+                            rx.text("sample(s) analyzed", color=MUTED, font_size="0.74rem"),
+                            spacing="1",
+                            align="center",
+                        ),
+                        rx.text(
+                            "Waiting for analysis",
+                            color=MUTED,
+                            font_size="0.74rem",
+                            text_align="right",
                         ),
                     ),
+                    spacing="1",
+                    align="end",
                 ),
-                variant="surface",
-                size="3",
                 width="100%",
+                align="start",
+            ),
+            rx.box(
+                rx.cond(
+                    AppState.has_biometric_result,
+                    rx.vstack(
+                        biometric_report_header_row(),
+                        rx.vstack(
+                            rx.foreach(AppState.biometric_reports, biometric_report_row),
+                            spacing="3",
+                            width="100%",
+                        ),
+                        spacing="3",
+                        width="100%",
+                    ),
+                    biometric_report_empty_state(),
+                ),
+                width="100%",
+                background="linear-gradient(180deg, rgba(248,250,252,0.78) 0%, rgba(255,255,255,0.98) 100%)",
+                border="1px solid rgba(15, 23, 42, 0.10)",
+                border_radius="24px",
+                padding="1.1rem",
+                box_shadow="inset 0 1px 0 rgba(255,255,255,0.9)",
             ),
             rx.hstack(
+                rx.cond(
+                    AppState.has_biometric_result,
+                    rx.text(
+                        "Select a report row to open the full biometric detail modal.",
+                        color=MUTED,
+                        font_size="0.82rem",
+                    ),
+                    rx.text(
+                        "This panel will become interactive after your first analysis run.",
+                        color=MUTED,
+                        font_size="0.82rem",
+                    ),
+                ),
                 rx.spacer(),
                 rx.button(
                     "Download",
                     on_click=AppState.download_biometric_results,
                     background=PRIMARY,
                     color="white",
-                    border_radius="10px",
+                    border_radius="14px",
                     padding_x="2rem",
-                    padding_y="1.5rem",
-                    font_weight="700",
+                    padding_y="1.35rem",
+                    font_weight="800",
+                    box_shadow="0 12px 24px rgba(20, 28, 50, 0.16)",
+                    _hover={"transform": "translateY(-1px)", "box_shadow": "0 16px 30px rgba(20, 28, 50, 0.20)"},
+                    transition="all 0.18s ease",
                 ),
                 width="100%",
-                margin_top="1rem",
+                margin_top="0.25rem",
+                align="center",
             ),
             width="100%",
-            spacing="4",
+            spacing="5",
             align="start",
         ),
         width="100%",
-        padding="1.5rem",
-        border_left="4px solid #10B981",
-        border_top_left_radius="4px",
-        border_bottom_left_radius="4px",
+        padding="1.6rem",
+        border_left="5px solid #10B981",
+        border_top_left_radius="6px",
+        border_bottom_left_radius="6px",
+        min_height="100%",
     )
 
     content = rx.vstack(
