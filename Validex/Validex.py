@@ -196,7 +196,13 @@ class AppState(rx.State):
     @rx.var
     def biometric_detail_ring_bg(self) -> str:
         score_val = max(0, min(100, int(self.biometric_detail_score))) if self.biometric_detail_score else 0
-        return f"conic-gradient(#141C32 {score_val}%, #E5E7EB {score_val}% 100%)"
+        if self.biometric_detail_status == "Accepted":
+            return f"conic-gradient(#74C96B {score_val}%, rgba(116,201,107,0.18) {score_val}% 100%)"
+        if self.biometric_detail_status == "Review":
+            warm_cut = max(18, min(score_val, 26))
+            green_cut = max(score_val, 72)
+            return f"conic-gradient(#E8B931 {warm_cut}%, #7CCA69 {warm_cut}% {green_cut}%, rgba(232,185,49,0.18) {green_cut}% 100%)"
+        return f"conic-gradient(#E46C5D {score_val}%, rgba(228,108,93,0.18) {score_val}% 100%)"
 
     @rx.var
     def biometric_detail_badge_color(self) -> str:
@@ -1904,33 +1910,69 @@ def biometric_report_row(report: dict[str, Any]) -> rx.Component:
 
 def biometric_detail_modal() -> rx.Component:
     preview_panel = rx.box(
-        rx.cond(
-            AppState.biometric_detail_preview_is_image,
-            rx.image(
-                src=rx.get_upload_url(AppState.biometric_detail_preview_filename),
-                width="100%",
-                height="320px",
-                object_fit="cover",
-                border_radius="20px",
-            ),
-            rx.center(
-                rx.vstack(
-                    rx.icon("image", size=36, color=PRIMARY),
-                    rx.text(
-                        AppState.biometric_detail_filename,
-                        color=PRIMARY,
-                        font_weight="700",
-                        text_align="center",
-                    ),
-                    spacing="2",
-                    align="center",
+        rx.box(
+            rx.cond(
+                AppState.biometric_detail_preview_is_image,
+                rx.image(
+                    src=rx.get_upload_url(AppState.biometric_detail_preview_filename),
+                    width="100%",
+                    height="100%",
+                    object_fit="cover",
+                    border_radius="18px",
                 ),
-                width="100%",
-                height="320px",
-                background="#F4F5F7",
-                border_radius="20px",
-                border="1px solid rgba(20, 28, 50, 0.08)",
+                rx.center(
+                    rx.vstack(
+                        rx.icon("image", size=36, color=PRIMARY),
+                        rx.text(
+                            AppState.biometric_detail_filename,
+                            color=PRIMARY,
+                            font_weight="700",
+                            text_align="center",
+                        ),
+                        spacing="2",
+                        align="center",
+                    ),
+                    width="100%",
+                    height="100%",
+                    background="#F8F8F6",
+                    border_radius="18px",
+                ),
             ),
+            rx.hstack(
+                rx.button(
+                    rx.icon("search", size=16),
+                    variant="ghost",
+                    color="#FFFFFF",
+                    background="rgba(148,163,184,0.80)",
+                    border_radius="12px",
+                    padding="0.55rem",
+                    min_width="unset",
+                    cursor="default",
+                ),
+                rx.button(
+                    rx.icon("expand", size=16),
+                    variant="ghost",
+                    color="#FFFFFF",
+                    background="rgba(148,163,184,0.80)",
+                    border_radius="12px",
+                    padding="0.55rem",
+                    min_width="unset",
+                    cursor="default",
+                ),
+                position="absolute",
+                right="1rem",
+                bottom="1rem",
+                spacing="2",
+            ),
+            position="relative",
+            width="100%",
+            min_height="760px",
+            border_radius="20px",
+            overflow="hidden",
+            padding="0.75rem",
+            background="linear-gradient(180deg, rgba(255,255,255,0.97) 0%, rgba(247,247,244,0.99) 100%)",
+            border="1px solid rgba(255,255,255,0.90)",
+            box_shadow="inset 0 1px 0 rgba(255,255,255,0.95), 0 12px 26px rgba(15,23,42,0.08)",
         ),
         width="100%",
     )
@@ -1948,21 +1990,26 @@ def biometric_detail_modal() -> rx.Component:
                     text_transform="uppercase",
                 ),
                 width="100%",
-                padding_top="1rem",
-                padding_bottom="0.55rem",
+                padding="0.95rem 1rem 0.65rem 1rem",
                 border_bottom="1px solid rgba(15, 23, 42, 0.08)",
+                background="#FBFBF8",
             ),
             rx.grid(
-                rx.text(row["label"], color=PRIMARY, font_size="0.9rem", font_weight="600"),
-                biometric_metric_status_chip(row["status"]),
-                rx.text(row["value"], color=PRIMARY, font_size="0.88rem", font_weight="700", text_align="right"),
-                columns="3",
+                rx.vstack(
+                    rx.text(row["label"], color=PRIMARY, font_size="0.92rem", font_weight="700"),
+                    biometric_metric_status_chip(row["status"]),
+                    spacing="1",
+                    align="start",
+                ),
+                rx.text(row["value"], color=PRIMARY, font_size="0.96rem", font_weight="800", text_align="right"),
+                columns="2",
                 width="100%",
                 align_items="center",
-                grid_template_columns=["1.45fr", "0.7fr", "0.85fr"],
-                padding_y="0.8rem",
+                grid_template_columns=["1.5fr", "0.75fr"],
+                padding="0.95rem 1rem",
                 border_bottom="1px solid rgba(15, 23, 42, 0.05)",
                 column_gap="1rem",
+                background="#FFFFFF",
             ),
         )
 
@@ -1979,11 +2026,11 @@ def biometric_detail_modal() -> rx.Component:
                 rx.badge(
                     AppState.biometric_detail_badge_text,
                     color_scheme=AppState.biometric_detail_badge_color,
-                    variant="surface",
+                    variant="soft",
                     padding_x="0.8rem",
                     padding_y="0.3rem",
                     font_weight="800",
-                    border_radius="full",
+                    border_radius="10px",
                 ),
                 width="100%",
                 align="start",
@@ -1993,53 +2040,75 @@ def biometric_detail_modal() -> rx.Component:
                 rx.badge(
                     AppState.biometric_face_badge_text,
                     color_scheme=AppState.biometric_face_badge_color,
-                    variant="surface",
+                    variant="soft",
                     padding_x="0.9rem",
                     padding_y="0.35rem",
                     font_weight="800",
-                    border_radius="full",
+                    border_radius="8px",
                 ),
-                rx.fragment(),
+                rx.box(
+                    rx.text(
+                        "FINGERPRINT DETECTED",
+                        color="#4D9559",
+                        font_size="0.88rem",
+                        font_weight="800",
+                    ),
+                    background="rgba(180, 232, 185, 0.72)",
+                    border_radius="8px",
+                    padding="0.45rem 0.8rem",
+                ),
             ),
             rx.hstack(
                 rx.center(
-                    rx.center(
-                        rx.vstack(
-                            rx.text(AppState.biometric_detail_score, font_size="2.1rem", font_weight="800", color=PRIMARY, line_height="1"),
-                            rx.text("OpenBQ", font_size="0.72rem", font_weight="700", color=PRIMARY),
-                            spacing="1",
-                            align="center",
+                    rx.box(
+                        rx.center(
+                            rx.box(
+                                rx.vstack(
+                                    rx.text(AppState.biometric_detail_score, font_size="2.2rem", font_weight="800", color=PRIMARY, line_height="1"),
+                                    rx.text("OpenBQ", font_size="0.8rem", font_weight="700", color=PRIMARY),
+                                    spacing="1",
+                                    align="center",
+                                ),
+                                width="100%",
+                            ),
+                            width="132px",
+                            height="132px",
+                            background="#FFFFFF",
+                            border_radius="999px",
                         ),
-                        width="108px",
-                        height="108px",
-                        background="white",
-                        border_radius="50%",
+                        width="154px",
+                        height="154px",
+                        border_radius="999px",
+                        padding="11px",
+                        box_shadow="0 10px 26px rgba(15,23,42,0.10)",
                     ),
-                    width="132px",
-                    height="132px",
+                    width="174px",
+                    height="174px",
                     background=AppState.biometric_detail_ring_bg,
-                    border_radius="50%",
+                    border_radius="999px",
                 ),
                 rx.vstack(
-                    rx.text(AppState.biometric_detail_status_message, color=PRIMARY, font_weight="700"),
-                    rx.text(AppState.biometric_detail_summary, color=MUTED, font_size="0.9rem", line_height="1.5"),
+                    rx.text(AppState.biometric_detail_status_message, color=PRIMARY, font_weight="800", font_size="1.35rem"),
+                    rx.text(AppState.biometric_detail_summary, color=MUTED, font_size="0.95rem", line_height="1.65"),
                     spacing="2",
                     align="start",
-                    max_width="320px",
+                    max_width="360px",
                 ),
                 width="100%",
                 align="center",
-                spacing="5",
+                spacing="4",
             ),
             rx.box(
                 rx.vstack(
                     rx.hstack(
                         rx.text("Metric", color=MUTED, font_size="0.74rem", font_weight="800", letter_spacing="0.06em", text_transform="uppercase"),
-                        rx.spacer(),
                         rx.text("Status", color=MUTED, font_size="0.74rem", font_weight="800", letter_spacing="0.06em", text_transform="uppercase"),
                         rx.text("Value", color=MUTED, font_size="0.74rem", font_weight="800", letter_spacing="0.06em", text_transform="uppercase"),
                         width="100%",
                         align="center",
+                        justify="between",
+                        padding="0.85rem 1rem 0.7rem 1rem",
+                        background="#FBFBF8",
                     ),
                     rx.vstack(
                         rx.foreach(AppState.biometric_detail_metric_rows, detail_metric_row),
@@ -2053,19 +2122,35 @@ def biometric_detail_modal() -> rx.Component:
                 background="#FFFFFF",
                 border="1px solid rgba(15, 23, 42, 0.08)",
                 border_radius="18px",
-                padding="1rem",
-                max_height="380px",
+                padding="0",
+                max_height="470px",
                 overflow_y="auto",
+                scrollbar_width="thin",
+                scrollbar_color="rgba(148,163,184,0.90) rgba(229,231,235,0.72)",
+                style={"scrollbarGutter": "stable"},
+                **{
+                    "::-webkit-scrollbar": {"width": "10px"},
+                    "::-webkit-scrollbar-track": {
+                        "background": "rgba(229,231,235,0.72)",
+                        "borderRadius": "999px",
+                    },
+                    "::-webkit-scrollbar-thumb": {
+                        "background": "rgba(148,163,184,0.90)",
+                        "borderRadius": "999px",
+                        "border": "2px solid rgba(255,255,255,0.98)",
+                    },
+                },
             ),
             width="100%",
-            spacing="4",
+            spacing="3",
             align="start",
         ),
         width="100%",
-        padding="1.5rem",
-        box_shadow="none",
-        border="1px solid rgba(15, 23, 42, 0.08)",
-        border_radius="1px solid rgba(15, 23, 42, 0.08)"
+        padding="1.3rem",
+        box_shadow="inset 0 1px 0 rgba(255,255,255,0.96), 0 12px 26px rgba(15,23,42,0.08)",
+        border="1px solid rgba(255,255,255,0.90)",
+        border_radius="22px",
+        background="linear-gradient(180deg, rgba(255,255,255,0.97) 0%, rgba(247,247,244,0.99) 100%)",
     )
 
     return rx.dialog.root(
@@ -2079,6 +2164,8 @@ def biometric_detail_modal() -> rx.Component:
                         on_click=AppState.close_biometric_detail,
                         variant="ghost",
                         color=MUTED,
+                        border_radius="12px",
+                        background="rgba(255,255,255,0.72)",
                     ),
                     width="100%",
                     align="center",
@@ -2098,7 +2185,9 @@ def biometric_detail_modal() -> rx.Component:
             width="90vw",
             padding="1.1rem",
             border_radius="24px",
-            background="#FBFBFD",
+            background="linear-gradient(180deg, rgba(246,247,244,0.98) 0%, rgba(255,255,255,0.98) 100%)",
+            border="1px solid rgba(255,255,255,0.90)",
+            box_shadow="0 24px 60px rgba(15,23,42,0.18), inset 0 1px 0 rgba(255,255,255,0.96)",
         ),
         open=AppState.biometric_detail_open,
         on_open_change=AppState.set_biometric_detail_open,
