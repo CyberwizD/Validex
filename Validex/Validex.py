@@ -197,12 +197,12 @@ class AppState(rx.State):
     def biometric_detail_ring_bg(self) -> str:
         score_val = max(0, min(100, int(self.biometric_detail_score))) if self.biometric_detail_score else 0
         if self.biometric_detail_status == "Accepted":
-            return f"conic-gradient(#74C96B {score_val}%, rgba(116,201,107,0.18) {score_val}% 100%)"
+            return f"conic-gradient(#62BF5F 0% {score_val}%, #E4F4DF {score_val}% 100%)"
         if self.biometric_detail_status == "Review":
             warm_cut = max(18, min(score_val, 26))
             green_cut = max(score_val, 72)
-            return f"conic-gradient(#E8B931 {warm_cut}%, #7CCA69 {warm_cut}% {green_cut}%, rgba(232,185,49,0.18) {green_cut}% 100%)"
-        return f"conic-gradient(#E46C5D {score_val}%, rgba(228,108,93,0.18) {score_val}% 100%)"
+            return f"conic-gradient(#E3B72E 0% {warm_cut}%, #72C768 {warm_cut}% {green_cut}%, #F4E7BC {green_cut}% 100%)"
+        return f"conic-gradient(#D9534C 0% {score_val}%, #F4D7D4 {score_val}% 100%)"
 
     @rx.var
     def biometric_detail_badge_color(self) -> str:
@@ -856,12 +856,12 @@ def biometric_table_status_badge(status: str | rx.Var) -> rx.Component:
     )
     color = rx.cond(
         status == "Pass",
-        SUCCESS,
+        "#168A49",
         rx.cond(status == "Warning", WARNING, FAILURE),
     )
     background = rx.cond(
         status == "Pass",
-        "rgba(34,197,94,0.12)",
+        "#EAF8EE",
         rx.cond(status == "Warning", "rgba(245,158,11,0.14)", "rgba(239,68,68,0.12)"),
     )
     return rx.hstack(
@@ -872,7 +872,7 @@ def biometric_table_status_badge(status: str | rx.Var) -> rx.Component:
             background=color,
             box_shadow=rx.cond(
                 status == "Pass",
-                "0 0 0 3px rgba(34,197,94,0.10)",
+                "0 0 0 3px rgba(22,138,73,0.08)",
                 rx.cond(
                     status == "Warning",
                     "0 0 0 3px rgba(245,158,11,0.10)",
@@ -891,8 +891,13 @@ def biometric_table_status_badge(status: str | rx.Var) -> rx.Component:
         align="center",
         background=background,
         border_radius="999px",
-        padding_x="0.7rem",
-        padding_y="0.28rem",
+        padding_x="0.62rem",
+        padding_y="0.25rem",
+        border=rx.cond(
+            status == "Pass",
+            "1px solid rgba(22,138,73,0.08)",
+            rx.cond(status == "Warning", "1px solid rgba(245,158,11,0.10)", "1px solid rgba(239,68,68,0.10)"),
+        ),
     )
 
 
@@ -1945,7 +1950,7 @@ def biometric_detail_modal() -> rx.Component:
                     color="#FFFFFF",
                     background="rgba(148,163,184,0.80)",
                     border_radius="12px",
-                    padding="0.55rem",
+                    padding="0.58rem",
                     min_width="unset",
                     cursor="default",
                 ),
@@ -1955,14 +1960,14 @@ def biometric_detail_modal() -> rx.Component:
                     color="#FFFFFF",
                     background="rgba(148,163,184,0.80)",
                     border_radius="12px",
-                    padding="0.55rem",
+                    padding="0.58rem",
                     min_width="unset",
                     cursor="default",
                 ),
                 position="absolute",
                 right="1rem",
                 bottom="1rem",
-                spacing="2",
+                spacing="4",
             ),
             position="relative",
             width="100%",
@@ -2065,28 +2070,29 @@ def biometric_detail_modal() -> rx.Component:
                             rx.box(
                                 rx.vstack(
                                     rx.text(AppState.biometric_detail_score, font_size="2.2rem", font_weight="800", color=PRIMARY, line_height="1"),
-                                    rx.text("OpenBQ", font_size="0.8rem", font_weight="700", color=PRIMARY),
-                                    spacing="1",
-                                    align="center",
-                                ),
-                                width="100%",
-                            ),
-                            width="132px",
-                            height="132px",
-                            background="#FFFFFF",
-                            border_radius="999px",
+                            rx.text("OpenBQ", font_size="0.8rem", font_weight="700", color=PRIMARY),
+                            spacing="1",
+                            align="center",
                         ),
-                        width="154px",
-                        height="154px",
-                        border_radius="999px",
-                        padding="11px",
-                        box_shadow="0 10px 26px rgba(15,23,42,0.10)",
+                        width="100%",
                     ),
-                    width="174px",
-                    height="174px",
-                    background=AppState.biometric_detail_ring_bg,
+                    width="128px",
+                    height="128px",
+                    background="#FFFFFF",
                     border_radius="999px",
+                    box_shadow="inset 0 0 0 1px rgba(15,23,42,0.04)",
                 ),
+                width="152px",
+                height="152px",
+                border_radius="999px",
+                padding="12px",
+                box_shadow="0 12px 28px rgba(15,23,42,0.10), inset 0 0 0 1px rgba(255,255,255,0.5)",
+            ),
+            width="170px",
+            height="170px",
+            background=AppState.biometric_detail_ring_bg,
+            border_radius="999px",
+        ),
                 rx.vstack(
                     rx.text(AppState.biometric_detail_status_message, color=PRIMARY, font_weight="800", font_size="1.35rem"),
                     rx.text(AppState.biometric_detail_summary, color=MUTED, font_size="0.95rem", line_height="1.65"),
