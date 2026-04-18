@@ -47,6 +47,27 @@ def default_batch_summary() -> dict[str, Any]:
     }
 
 
+def default_batch_detail_row() -> dict[str, Any]:
+    return {
+        "row_number": 0,
+        "record_name": "",
+        "score": 0.0,
+        "score_band": "",
+        "status": "",
+        "issue_count": 0,
+        "duplicate_flag": False,
+        "duplicate_score": None,
+        "first_name": "",
+        "last_name": "",
+        "date_of_birth": "",
+        "age": "",
+        "phone": "",
+        "email": "",
+        "issues": [],
+        "issues_text": "No issues found",
+    }
+
+
 def biometric_row_status(status: str) -> str:
     if status == "Accepted":
         return "Pass"
@@ -151,6 +172,8 @@ class AppState(rx.State):
     batch_page: int = 1
     batch_page_size: int = 6
     has_batch_results: bool = False
+    batch_detail_open: bool = False
+    batch_detail_row: dict[str, Any] = default_batch_detail_row()
 
     biometric_modality: str = "face"
     biometric_error: str = ""
@@ -255,6 +278,14 @@ class AppState(rx.State):
         start = (self.batch_page - 1) * self.batch_page_size
         end = start + self.batch_page_size
         return self.batch_results_rows[start:end]
+
+    @rx.var
+    def batch_detail_issues(self) -> list[str]:
+        return list(self.batch_detail_row.get("issues", []))
+
+    @rx.var
+    def batch_detail_has_issues(self) -> bool:
+        return len(self.batch_detail_issues) > 0
 
     @rx.var
     def biometric_accept_map(self) -> dict[str, list[str]]:
@@ -366,6 +397,8 @@ class AppState(rx.State):
         self.has_batch_results = False
         self.batch_page = 1
         self.batch_error = ""
+        self.batch_detail_open = False
+        self.batch_detail_row = default_batch_detail_row()
         self.reset_biometric_state()
         return rx.redirect("/")
 
@@ -381,6 +414,16 @@ class AppState(rx.State):
     def next_batch_page(self) -> None:
         if self.batch_page < self.batch_total_pages:
             self.batch_page += 1
+
+    def open_batch_detail(self, row_number: int) -> None:
+        for row in self.batch_results_rows:
+            if row["row_number"] == row_number:
+                self.batch_detail_row = row
+                self.batch_detail_open = True
+                break
+
+    def close_batch_detail(self) -> None:
+        self.batch_detail_open = False
 
     def validate_manual_entry(self) -> None:
         init_database()
@@ -454,6 +497,8 @@ class AppState(rx.State):
         self.batch_summary = build_batch_summary(batch_row_models).to_dict()
         self.batch_page = 1
         self.has_batch_results = True
+        self.batch_detail_open = False
+        self.batch_detail_row = default_batch_detail_row()
         return rx.clear_selected_files(BATCH_UPLOAD_ID)
 
     def export_batch_results(self):
@@ -791,19 +836,81 @@ def manual_row(row: dict[str, Any]) -> rx.Component:
 
 
 def batch_row(row: dict[str, Any]) -> rx.Component:
-    duplicate_cell = rx.cond(
-        row["duplicate_flag"],
-        percent_value(row["duplicate_score"]),
-        rx.text("-", color=MUTED),
+    status_label = rx.cond(
+        row["status"] == "Pass",
+        "PASS",
+        rx.cond(row["status"] == "Warning", "WARNING", "FAIL"),
+    )
+    status_color = rx.cond(
+        row["status"] == "Pass",
+        "#168A49",
+        rx.cond(row["status"] == "Warning", "#B7791F", "#B42318"),
+    )
+    status_bg = rx.cond(
+        row["status"] == "Pass",
+        "#EAF8EE",
+        rx.cond(row["status"] == "Warning", "#FFF3D7", "#FEE4E2"),
+    )
+    score_color = rx.cond(
+        row["score_band"] == "Excellent",
+        "#168A49",
+        rx.cond(row["score_band"] == "Good", "#B7791F", "#B42318"),
     )
     return rx.table.row(
-        rx.table.cell(rx.hstack(rx.text("#", color=MUTED, font_weight="600"), rx.text(row["row_number"], color=PRIMARY, font_weight="600"), spacing="1", align="center")),
-        rx.table.cell(rx.text(row["record_name"], color=PRIMARY, font_weight="600")),
-        rx.table.cell(status_badge(row["status"])),
-        rx.table.cell(percent_value(row["score"])),
-        rx.table.cell(rx.text(row["issues_text"], color=MUTED, font_size="0.9rem"), max_width="320px"),
-        rx.table.cell(duplicate_cell),
-        _hover={"background": "#F9FAFB"},
+        rx.table.cell(
+            rx.text(row["row_number"], color=MUTED, font_weight="800", font_size="0.82rem"),
+            padding_y="0.9rem",
+        ),
+        rx.table.cell(
+            rx.vstack(
+                rx.text(row["record_name"], color=PRIMARY, font_weight="800", font_size="0.92rem"),
+                rx.text("Open row details", color=MUTED, font_size="0.7rem"),
+                spacing="1",
+                align="start",
+            ),
+            padding_y="0.9rem",
+        ),
+        rx.table.cell(
+            rx.hstack(
+                rx.box(width="6px", height="6px", border_radius="999px", background=status_color),
+                rx.text(status_label, color=status_color, font_size="0.68rem", font_weight="800", letter_spacing="0.04em"),
+                spacing="1",
+                align="center",
+                justify="center",
+                width="fit-content",
+                min_width="64px",
+                background=status_bg,
+                border_radius="999px",
+                padding="0.22rem 0.55rem",
+            ),
+            padding_y="0.9rem",
+        ),
+        rx.table.cell(
+            rx.hstack(
+                rx.text(row["score"], color=score_color, font_weight="900", font_size="0.98rem"),
+                rx.text("%", color=score_color, font_weight="800", font_size="0.72rem"),
+                spacing="1",
+                align="baseline",
+            ),
+            padding_y="0.9rem",
+        ),
+        rx.table.cell(
+            rx.text(
+                row["issues_text"],
+                color=MUTED,
+                font_size="0.84rem",
+                line_height="1.45",
+                max_width="520px",
+                overflow="hidden",
+                text_overflow="ellipsis",
+                white_space="nowrap",
+            ),
+            padding_y="0.9rem",
+        ),
+        on_click=AppState.open_batch_detail(row["row_number"]),
+        cursor="pointer",
+        border_bottom="1px solid rgba(15,23,42,0.06)",
+        _hover={"background": "#FBFCFE", "box_shadow": "inset 3px 0 0 #FDBA4D"},
     )
 
 
@@ -887,12 +994,16 @@ def biometric_table_status_badge(status: str | rx.Var) -> rx.Component:
             font_weight="800",
             letter_spacing="0.05em",
         ),
-        spacing="2",
+        spacing="1",
         align="center",
+        justify="center",
         background=background,
         border_radius="999px",
-        padding_x="0.62rem",
+        padding_x="0.48rem",
         padding_y="0.25rem",
+        width="fit-content",
+        min_width=rx.cond(status == "Pass", "70px", rx.cond(status == "Warning", "92px", "64px")),
+        white_space="nowrap",
         border=rx.cond(
             status == "Pass",
             "1px solid rgba(22,138,73,0.08)",
@@ -1355,6 +1466,217 @@ def rules_configuration_modal() -> rx.Component:
     )
 
 
+def batch_detail_field(label: str, value: Any) -> rx.Component:
+    return rx.box(
+        rx.text(
+            label,
+            color=MUTED,
+            font_size="0.72rem",
+            font_weight="800",
+            letter_spacing="0.07em",
+            text_transform="uppercase",
+        ),
+        rx.text(
+            rx.cond(value != "", value, "-"),
+            color=PRIMARY,
+            font_size="0.96rem",
+            font_weight="700",
+            margin_top="0.3rem",
+        ),
+        background="#FBFCFE",
+        border="1px solid rgba(15, 23, 42, 0.08)",
+        border_radius="16px",
+        padding="1rem",
+    )
+
+
+def batch_detail_issue(issue: str) -> rx.Component:
+    return rx.hstack(
+        rx.icon("circle-alert", size=15, color=WARNING),
+        rx.text(issue, color=PRIMARY, font_size="0.9rem", line_height="1.5"),
+        align="start",
+        spacing="3",
+        width="100%",
+        background="#FFF7E6",
+        border="1px solid rgba(217,119,6,0.12)",
+        border_radius="14px",
+        padding="0.85rem 1rem",
+    )
+
+
+def batch_detail_modal() -> rx.Component:
+    status_label = rx.cond(
+        AppState.batch_detail_row["status"] == "Pass",
+        "PASS",
+        rx.cond(AppState.batch_detail_row["status"] == "Warning", "WARNING", "FAIL"),
+    )
+    status_color = rx.cond(
+        AppState.batch_detail_row["status"] == "Pass",
+        "#168A49",
+        rx.cond(AppState.batch_detail_row["status"] == "Warning", "#B7791F", "#B42318"),
+    )
+    status_bg = rx.cond(
+        AppState.batch_detail_row["status"] == "Pass",
+        "#EAF8EE",
+        rx.cond(AppState.batch_detail_row["status"] == "Warning", "#FFF3D7", "#FEE4E2"),
+    )
+    score_color = rx.cond(
+        AppState.batch_detail_row["score_band"] == "Excellent",
+        "#168A49",
+        rx.cond(AppState.batch_detail_row["score_band"] == "Good", "#B7791F", "#B42318"),
+    )
+    return rx.dialog.root(
+        rx.dialog.content(
+            rx.vstack(
+                rx.hstack(
+                    rx.vstack(
+                        rx.text("BATCH RECORD DETAIL", color=MUTED, font_size="0.75rem", font_weight="800", letter_spacing="0.1em"),
+                        rx.heading(AppState.batch_detail_row["record_name"], size="7", color=PRIMARY, font_weight="800"),
+                        spacing="1",
+                        align="start",
+                    ),
+                    rx.spacer(),
+                    rx.button(
+                        rx.icon("x", size=18),
+                        on_click=AppState.close_batch_detail,
+                        variant="ghost",
+                        color=MUTED,
+                        border_radius="12px",
+                    ),
+                    width="100%",
+                    align="center",
+                ),
+                rx.grid(
+                    rx.box(
+                        rx.text("Validation Score", color=MUTED, font_size="0.76rem", font_weight="800", letter_spacing="0.08em", text_transform="uppercase"),
+                        rx.hstack(
+                            rx.text(AppState.batch_detail_row["score"], color=score_color, font_size="2rem", font_weight="900", line_height="1"),
+                            rx.text("%", color=score_color, font_size="0.92rem", font_weight="800", margin_top="0.95rem"),
+                            align="end",
+                            spacing="1",
+                            margin_top="0.8rem",
+                        ),
+                        rx.text(AppState.batch_detail_row["score_band"], color=MUTED, font_size="0.88rem", font_weight="700", margin_top="0.35rem"),
+                        background="#FFFFFF",
+                        border="1px solid rgba(15, 23, 42, 0.08)",
+                        border_radius="20px",
+                        padding="1.25rem",
+                    ),
+                    rx.box(
+                        rx.text("Status", color=MUTED, font_size="0.76rem", font_weight="800", letter_spacing="0.08em", text_transform="uppercase"),
+                        rx.box(height="0.8rem"),
+                        rx.hstack(
+                            rx.box(width="7px", height="7px", border_radius="999px", background=status_color),
+                            rx.text(status_label, color=status_color, font_size="0.72rem", font_weight="800", letter_spacing="0.04em"),
+                            spacing="2",
+                            align="center",
+                            justify="center",
+                            width="fit-content",
+                            background=status_bg,
+                            border_radius="999px",
+                            padding="0.3rem 0.75rem",
+                        ),
+                        rx.cond(
+                            AppState.batch_detail_row["duplicate_flag"],
+                            rx.text(
+                                "Duplicate signal detected by similarity matching. It is advisory, not a hard rejection.",
+                                color=MUTED,
+                                font_size="0.86rem",
+                                line_height="1.5",
+                                margin_top="0.8rem",
+                            ),
+                            rx.text(
+                                "No duplicate warning for this row.",
+                                color=MUTED,
+                                font_size="0.86rem",
+                                margin_top="0.8rem",
+                            ),
+                        ),
+                        background="#FFFFFF",
+                        border="1px solid rgba(15, 23, 42, 0.08)",
+                        border_radius="20px",
+                        padding="1.25rem",
+                    ),
+                    columns="2",
+                    spacing="4",
+                    width="100%",
+                ),
+                rx.cond(
+                    AppState.batch_detail_row["duplicate_flag"],
+                    rx.hstack(
+                        rx.icon("copy-check", size=18, color=WARNING),
+                        rx.vstack(
+                            rx.text("Potential Duplicate", color=PRIMARY, font_size="0.92rem", font_weight="800"),
+                            rx.text(
+                                AppState.batch_detail_row["issues_text"],
+                                color=MUTED,
+                                font_size="0.86rem",
+                                line_height="1.5",
+                            ),
+                            spacing="1",
+                            align="start",
+                        ),
+                        align="start",
+                        spacing="3",
+                        width="100%",
+                        background="#FFF7E6",
+                        border="1px solid rgba(217,119,6,0.14)",
+                        border_radius="16px",
+                        padding="1rem",
+                    ),
+                    rx.fragment(),
+                ),
+                rx.grid(
+                    batch_detail_field("First Name", AppState.batch_detail_row["first_name"]),
+                    batch_detail_field("Last Name", AppState.batch_detail_row["last_name"]),
+                    batch_detail_field("Date of Birth", AppState.batch_detail_row["date_of_birth"]),
+                    batch_detail_field("Age", AppState.batch_detail_row["age"]),
+                    batch_detail_field("Phone Number", AppState.batch_detail_row["phone"]),
+                    batch_detail_field("Email", AppState.batch_detail_row["email"]),
+                    columns="3",
+                    spacing="3",
+                    width="100%",
+                ),
+                rx.box(
+                    rx.hstack(
+                        rx.text("Validation Issues", color=PRIMARY, font_size="1rem", font_weight="800"),
+                        rx.spacer(),
+                        rx.text(AppState.batch_detail_row["issue_count"], color=MUTED, font_size="0.85rem", font_weight="800"),
+                        rx.text("issue(s)", color=MUTED, font_size="0.85rem"),
+                        width="100%",
+                        align="center",
+                    ),
+                    rx.cond(
+                        AppState.batch_detail_has_issues,
+                        rx.vstack(
+                            rx.foreach(AppState.batch_detail_issues, batch_detail_issue),
+                            spacing="2",
+                            width="100%",
+                            margin_top="1rem",
+                        ),
+                        rx.callout("No issues found for this record.", color_scheme="grass", width="100%", margin_top="1rem"),
+                    ),
+                    width="100%",
+                    background="#FFFFFF",
+                    border="1px solid rgba(15, 23, 42, 0.08)",
+                    border_radius="20px",
+                    padding="1.25rem",
+                ),
+                width="100%",
+                spacing="4",
+            ),
+            max_width="920px",
+            width="90vw",
+            border_radius="26px",
+            padding="1.5rem",
+            background="#FAFAFC",
+            box_shadow="0 24px 60px rgba(15,23,42,0.18)",
+        ),
+        open=AppState.batch_detail_open,
+        on_open_change=AppState.set_batch_detail_open,
+    )
+
+
 def demographics_page() -> rx.Component:
     summary_grid = rx.grid(
         score_panel(
@@ -1509,28 +1831,66 @@ def demographics_page() -> rx.Component:
                     spacing="3",
                     width="100%",
                 ),
-                rx.table.root(
-                    table_header(["Row", "Record", "Status", "Score", "Issues", "Duplicate"]),
-                    rx.table.body(
-                        rx.foreach(AppState.paginated_batch_rows, batch_row),
+                rx.box(
+                    rx.table.root(
+                        table_header(["Row", "Record", "Status", "Score", "Issues"]),
+                        rx.table.body(
+                            rx.foreach(AppState.paginated_batch_rows, batch_row),
+                        ),
+                        variant="ghost",
+                        size="3",
+                        width="100%",
                     ),
-                    variant="surface",
-                    size="3",
                     width="100%",
+                    background="#FFFFFF",
+                    border="1px solid rgba(15, 23, 42, 0.10)",
+                    border_radius="20px",
+                    overflow="hidden",
                 ),
                 rx.hstack(
-                    rx.button("Previous", on_click=AppState.previous_batch_page, variant="soft"),
                     rx.text(
-                        AppState.batch_page,
-                        color=PRIMARY,
-                        font_weight="600",
+                        "Click any row to inspect the validated fields and issues.",
+                        color=MUTED,
+                        font_size="0.82rem",
                     ),
-                    rx.text("/", color=MUTED),
-                    rx.text(AppState.batch_total_pages, color=MUTED),
-                    rx.button("Next", on_click=AppState.next_batch_page, variant="soft"),
-                    spacing="3",
-                    justify="end",
+                    rx.spacer(),
+                    rx.hstack(
+                        rx.button(
+                            rx.hstack(rx.icon("chevron-left", size=14), rx.text("Previous"), spacing="1", align="center"),
+                            on_click=AppState.previous_batch_page,
+                            background="#FFF4DC",
+                            color="#B7791F",
+                            border_radius="999px",
+                            padding_x="0.9rem",
+                            font_weight="800",
+                            size="2",
+                        ),
+                        rx.hstack(
+                            rx.text(AppState.batch_page, color=PRIMARY, font_weight="800"),
+                            rx.text("/", color=MUTED),
+                            rx.text(AppState.batch_total_pages, color=MUTED, font_weight="700"),
+                            align="center",
+                            spacing="2",
+                            background="#F8FAFC",
+                            border="1px solid rgba(15, 23, 42, 0.08)",
+                            border_radius="999px",
+                            padding="0.35rem 0.8rem",
+                        ),
+                        rx.button(
+                            rx.hstack(rx.text("Next"), rx.icon("chevron-right", size=14), spacing="1", align="center"),
+                            on_click=AppState.next_batch_page,
+                            background="#FFF4DC",
+                            color="#B7791F",
+                            border_radius="999px",
+                            padding_x="0.9rem",
+                            font_weight="800",
+                            size="2",
+                        ),
+                        spacing="2",
+                        align="center",
+                    ),
                     width="100%",
+                    align="center",
                 ),
                 spacing="5",
                 width="100%",
@@ -1573,6 +1933,7 @@ def demographics_page() -> rx.Component:
         summary_grid,
         batch_results,
         rules_configuration_modal(),
+        batch_detail_modal(),
         spacing="5",
         width="100%",
     )
@@ -2080,17 +2441,17 @@ def biometric_detail_modal() -> rx.Component:
                     height="128px",
                     background="#FFFFFF",
                     border_radius="999px",
-                    box_shadow="inset 0 0 0 1px rgba(15,23,42,0.04)",
                 ),
-                width="152px",
-                height="152px",
+                width="150px",
+                height="150px",
                 border_radius="999px",
-                padding="12px",
-                box_shadow="0 12px 28px rgba(15,23,42,0.10), inset 0 0 0 1px rgba(255,255,255,0.5)",
+                padding="11px",
+                background=AppState.biometric_detail_ring_bg,
+                box_shadow="0 12px 28px rgba(15,23,42,0.10)",
             ),
-            width="170px",
-            height="170px",
-            background=AppState.biometric_detail_ring_bg,
+            width="158px",
+            height="158px",
+            background="transparent",
             border_radius="999px",
         ),
                 rx.vstack(
