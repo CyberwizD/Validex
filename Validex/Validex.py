@@ -1707,7 +1707,7 @@ def demographics_page() -> rx.Component:
                     AppState.has_manual_result,
                     rx.box(
                         rx.table.root(
-                            table_header(["PARAMETER", "ENTERED VALUE", "STATUS", "DIAGNOSTIC LOG"]),
+                            table_header(["PARAMETER", "VALUE", "STATUS", "DIAGNOSTIC LOG"]),
                             rx.table.body(
                                 rx.foreach(AppState.filtered_manual_results_rows, manual_row),
                             ),
