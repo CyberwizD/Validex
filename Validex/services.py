@@ -127,7 +127,7 @@ def validate_name(value: str, label: str, rules: set[str]) -> FieldValidationRes
         if any(char.isdigit() for char in raw):
             issues.append(f"{label} cannot contain digits.")
         if not NAME_PATTERN.match(raw):
-            issues.append(f"{label} allows letters, spaces, hyphens, and apostrophes only.")
+            issues.append(f"{label} allows letters and spaces only.")
     status = "Fail" if issues else "Pass"
     score = 0.0 if issues else FIELD_WEIGHT
     return FieldValidationResult(label, raw, status, issues, score)
